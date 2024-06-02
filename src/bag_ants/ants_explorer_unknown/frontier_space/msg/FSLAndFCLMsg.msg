@@ -1,0 +1,4 @@
+FreeSpaceInfoMsg freeSpaceInfoMsg
+FrontierClusterListMsg frontierClusterListMsg
+int32 svp_id
+geometry_msgs/Point svp

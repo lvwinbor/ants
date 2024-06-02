@@ -1,0 +1,7 @@
+build/
+devel/
+src/bag_location/
+src/bag_reacar/
+src/bag_simulators/
+src/bag_tools/
+
