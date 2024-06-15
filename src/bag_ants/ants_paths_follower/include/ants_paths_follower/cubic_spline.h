@@ -46,20 +46,35 @@ std::vector<double> vec_diff(const std::vector<double> &input);
 */
 std::vector<double> cum_sum(const std::vector<double> &input);
 
-// 定义结构体点
+// 定义结构体
 struct Point {
-    double x = 0.0;
-    double y = 0.0;
+    double x;
+    double y;
 };
+struct RefPath {
+    double r_x;        // x坐标
+    double r_y;        // y坐标
+    double r_yaw;      // 航向角
+    double r_curvature;// 曲率
+    double r_s;        // 弧长
+};
+struct splineParameter {
+    // 三次多项式的四个系数，注意a为最低次项，依次升高
+    double a;
+    double b;
+    double c;
+    double d;
+};
+
 /*三次样条曲线插值最终得到每个区间拟合的系数
   d_i * (x-x_i)^3 + c_i * (x-x_i)^2 + b_i * (x-x_i) + a_i
 */
 class Spline {
 public:
-    std::vector<double> x, y;      // x为横坐标，y为函数值坐标
-    std::vector<double> h;         // x的步长
-    std::vector<double> a, b, c, d;// 三次多项式的四个系数，注意a为最低次项，依次升高
-    int nx = 0;                    // 区间数，即一共有几段要拟合的曲线
+    std::vector<Point> point;// x为横坐标，y为函数值坐标
+    std::vector<splineParameter> parameter;
+    int nx = 0;           // 区间数，即一共有几段要拟合的曲线
+    std::vector<double> h;// x的步长
 public:
     // 构造函数
     Spline() = default;
@@ -85,16 +100,23 @@ private:
 https://blog.csdn.net/u013468614/article/details/108416552
  */
 class Spline2D {
-public:
+private:
     Spline sx;            // x的样条曲线
     Spline sy;            // y的样条曲线
     std::vector<double> s;// 弧长，样条曲线的参数
+public:
+    std::vector<RefPath> path;
 
 public:
     // 构造函数
     Spline2D() = default;
-    Spline2D(const std::vector<double> &x, const std::vector<double> &y);
+    //    Spline2D(const std::vector<double> &x, const std::vector<double> &y);
+    explicit Spline2D(const std::vector<Point> &point);
+    // 根据输入的弧长vector进行插值
+    void interpolate(const std::vector<double> &s_vector);
 
+
+private:
     // 位置计算函数
     Point calc_position(double s_t);
     // 曲率计算函数
@@ -103,8 +125,6 @@ public:
     double calc_yaw(double s_t);
     // 弧长计算函数，输出数列为从起点到当前位置的弧长
     std::vector<double> calc_s(const std::vector<double> &x, const std::vector<double> &y);
-    // 返回总弧长
-    double length();
 };
 
 struct SplineCarState {
@@ -122,11 +142,8 @@ struct SplineCarState {
 
 class CSRefPath {
 public:
-    std::vector<double> r_x;        // x坐标
-    std::vector<double> r_y;        // y坐标
-    std::vector<double> r_yaw;      // 航向角
-    std::vector<double> r_curvature;// 曲率
-    std::vector<double> r_s;        // 弧长
+public:
+    std::vector<RefPath> r_path;
 
 public:
     CSRefPath() = default;
