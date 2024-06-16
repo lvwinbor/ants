@@ -8,12 +8,12 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  std_msgs
-  sensor_msgs
-  pcl_ros
-  geometry_msgs
-  common_private_msgs
+        roscpp
+        std_msgs
+        sensor_msgs
+        pcl_ros
+        geometry_msgs
+        common_private_msgs
 )
 
 find_package(PCL REQUIRED)
@@ -22,33 +22,31 @@ find_package(PCL REQUIRED)
 ## catkin specific configuration ##
 ###################################
 catkin_package(
-  CATKIN_DEPENDS 
-  roscpp
-  std_msgs
-  sensor_msgs
-  pcl_ros
-  geometry_msgs
+        CATKIN_DEPENDS
+        roscpp
+        std_msgs
+        sensor_msgs
+        pcl_ros
+        geometry_msgs
 )
 
 ###########
 ## Build ##
 ###########
 include_directories(
-  ${catkin_INCLUDE_DIRS}
-  include/ants_paths_follower
-  ${PCL_INCLUDE_DIRS}
-  "${PROJECT_SOURCE_DIR}/include"
-  /usr/local/include # Location when using 'make system_install'
-  /usr/include       # More usual location (e.g. when installing using a package)
+        ${catkin_INCLUDE_DIRS}
+        include/ants_paths_follower
+        ${PCL_INCLUDE_DIRS}
+        "${PROJECT_SOURCE_DIR}/include"
+        /usr/local/include # Location when using 'make system_install'
+        /usr/include       # More usual location (e.g. when installing using a package)
 )
 
 link_directories(
-  /usr/local/lib # Location when using 'make system_install'
-  /usr/lib       # More usual location (e.g. when installing using a package)
+        /usr/local/lib # Location when using 'make system_install'
+        /usr/lib       # More usual location (e.g. when installing using a package)
 )
-add_library(cs_lib2
-  include/ants_paths_follower/cubic_spline.h  src/cubic_spline.cpp
-)
+add_library(cs_lib2 src/cubic_spline.cpp)
 
 add_executable(ants_paths_follower src/pathFollower.cpp)
 target_link_libraries(ants_paths_follower ${catkin_LIBRARIES} ${PCL_LIBRARIES})
@@ -63,7 +61,7 @@ add_executable(ants_paths_follower_swarm src/pathFollower_swarm.cpp)
 target_link_libraries(ants_paths_follower_swarm ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(liner_speed_regulator src/liner_speed_regulator.cpp)
-target_link_libraries(liner_speed_regulator  cs_lib2 ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(liner_speed_regulator cs_lib2 ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
