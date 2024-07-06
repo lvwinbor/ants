@@ -3,7 +3,3 @@ devel/
 src/bag_location/
 src/bag_simulators/
 src/bag_tools/
-cmake-build-debug-gcc9/
-cmake-build-debug-wsl
-.idea/
-.clang-format

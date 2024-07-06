@@ -1,10 +1,10 @@
 <launch>
-    <arg name="send_port_Remote" default="1234"/>
-    <arg name="receive_port_Remote" default="12345"/>
+    <arg name="send_port_Remote" default="8021"/>
+    <arg name="receive_port_Remote" default="20033"/>
     <arg name="send_port_vehicle" default="12345"/>
     <arg name="receive_port_vehicle" default="123456"/>
-    <arg name="server_ip_Remote" default="127.0.0.5"/>
-    <arg name="client_ip_Remote" default="127.0.0.6"/>
+    <arg name="server_ip_Remote" default="192.2.2.21"/>
+    <arg name="client_ip_Remote" default="192.2.2.40"/>
     <arg name="server_ip_vehicle" default="127.0.0.5"/>
     <arg name="client_ip_vehicle" default="127.0.0.6"/>
 
@@ -21,4 +21,15 @@
       <param name="server_ip_vehicle" type="string" value="$(arg server_ip_vehicle)" />
       <param name="client_ip_vehicle" type="string" value="$(arg client_ip_vehicle)" />
     </node>
+
+    <node pkg="ants_paths_follower" type="joy_control" name="joy_control" output="screen" required="true">
+    </node>
+
+    
+  启动 joy_node 并设置设备参数
+  <node name="joy_node" pkg="joy" type="joy_node" output="screen">
+    <param name="dev" value="/dev/input/js0" />
+     <param name="deadzone" value="0.1" /> <!-- 死区值 -->
+  </node>
+
 </launch>

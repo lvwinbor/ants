@@ -1,3 +1,4 @@
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 cmake_minimum_required(VERSION 3.0.2)
 project(ants_paths_follower)
 
@@ -56,6 +57,9 @@ target_link_libraries(UdpRemote ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(UdpVehicle src/UdpVehicle.cpp)
 target_link_libraries(UdpVehicle ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+ add_executable(joy_control src/joy_control.cpp)
+ target_link_libraries(joy_control ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(ants_paths_follower_swarm src/pathFollower_swarm.cpp)
 target_link_libraries(ants_paths_follower_swarm ${catkin_LIBRARIES} ${PCL_LIBRARIES})
