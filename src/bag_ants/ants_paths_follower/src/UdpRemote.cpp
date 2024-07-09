@@ -7,127 +7,88 @@
 #include <unistd.h>
 
 #pragma pack(1)
-
+// 传输数据的头部
 struct HEADER {
-    uint16_t mFrameHeader;
-    uint8_t mFrameType;
-    uint8_t mFrameLength;
+    uint16_t mFrameHeader;//帧头
+    uint8_t mFrameType;   //帧类型
+    uint8_t mFrameLength; //帧长
 };
 
-
+// 操控端向底盘发送的操控指令
 struct UdpControlCommand {
     HEADER mHeader;
-    u_char driveGear;
-    u_char driveMode;
-    u_char carMaxSpeed;
-    u_char armMaxSpeed;
-    char chassisControlArmHorizontal;
-    char chassisControlArmVertical;
-    u_char chassisPower;
-    int16_t frontArmAngle;
-    int16_t behindArmAngle;
-    u_char dataDestruction;
-    uint16_t reserved;
-    u_char checkSum;
+    u_char driveGear;                //驱动档位、摆臂档位及摆臂控制
+    u_char driveMode;                //操控模式切换
+    u_char carMaxSpeed;              //底盘限速
+    u_char armMaxSpeed;              //摆臂限速设定
+    char chassisControlArmHorizontal;//底盘操纵摇杆水平方向值（右摇杆）
+    char chassisControlArmVertical;  //底盘操纵摇杆垂直方向值（右摇杆）
+    u_char chassisPower;             //底盘配电
+    int16_t frontArmAngle;           //前摆臂角度
+    int16_t behindArmAngle;          //后摆臂角度
+    u_char dataDestruction;          //数据销毁
+    uint16_t reserved;               //预留
+    u_char checkSum;                 //校验和
 };
-
+// 操控端接收的状态
 struct UdpRecvCommand {
     HEADER mHeader;
-    uint8_t carDriveState;
-    int8_t carSpeed;
-    uint8_t batteryVoltage;
-    uint8_t batterySoc;
-    uint8_t carDriveMode;
-    int16_t batteryCircuit;
-    // uint8_t batteryMaxTemperature;
-    // uint8_t batteryMinVoltage;
-    // uint8_t batteryWarning1;
-    // uint8_t batterySuperMode;
-    // uint8_t batteryWarning2;
-    // uint8_t electrifyCommand;
-    // int8_t chassisControlArmHorizontal;
-    // int8_t chassisControlArmVertical;
-
-
-    //    u_char armMaxSpeed;
-    //    char chassisControlArmHorizontal;
-    //    char chassisControlArmVertical;
-    //    u_char chassisPower;
-    //    int16_t frontArmAngle;
-    //    int16_t behindArmAngle;
-    //    u_char dataDestruction;
-    //    uint16_t reserved;
-    //    u_char checkSum;
-    //
-    //
-    //    int16_t vel;
-    //    int16_t cur;
-    //    int16_t wheelVelLeft;
-    //    int16_t wheelVelRight;
-    //    int16_t reserve;
-    //    uint8_t checkSum;
+    uint8_t carDriveState; //平台机动状态
+    int8_t carSpeed;       //平台速度
+    uint8_t batteryVoltage;//电池电压（V）
+    uint8_t batterySoc;    //电池Soc
+    uint8_t carDriveMode;  //底盘驾驶模式
+    int16_t batteryCircuit;//电池电流
 };
 
 #pragma pack()
-uint8_t sendBuffer[32];
-uint8_t recvBuffer[32];
-// int16_t recvBuffer[32];
+uint8_t sendBuffer[32];//发送缓冲区
+uint8_t recvBuffer[32];//接收缓冲区
 
-const int SEND_PORT = 8021;    // 发送数据的UDP端口
-const int RECEIVE_PORT = 20033;// 接收数据的UDP端口
-//const int RECEIVE_PORT = 40021;
+const int SEND_PORT = 8021;          // 发送数据的目标UDP端口
+const int RECEIVE_PORT = 20033;      // 接收数据的自身UDP端口
 const char *SERVER_IP = "192.2.2.21";// 目标服务器IP地址
+const char *CLIENT_IP = "192.2.2.40";// 自身服务器IP地址
 
 // 发送数据的线程函数
-void sendThread(int sockfd, /* int8_t driveGear, int8_t driveMode, int8_t carMaxSpeed, int8_t chassisControlArmHorizontal,
-                                    //int8_t chassisControlArmVertical, uint8_t chassisPower, uint16_t frontArmAngle, uint16_t behindArmAngle, */
-                const sockaddr_in &serverAddr) {
-    // struct sockaddr_in serverAddr;
-    // serverAddr.sin_family = AF_INET;
-    // serverAddr.sin_port = htons(SEND_PORT);
-    // serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+void sendThread(int sockfd, const sockaddr_in &serverAddr) {
 
     while (true) {
 
         UdpControlCommand dataToSend;
-        dataToSend.mHeader.mFrameHeader = 0xffaa;
-        dataToSend.mHeader.mFrameType = 0x0a;
-        dataToSend.mHeader.mFrameLength = 19;
+        dataToSend.mHeader.mFrameHeader = 0xffaa;//固定值
+        dataToSend.mHeader.mFrameType = 0x0a;    //固定值
+        dataToSend.mHeader.mFrameLength = 19;    //固定值
 
         // dataToSend.driveGear = 0b10100111;
-        dataToSend.driveGear = 0b0101;
-        dataToSend.driveMode = 0b01;
-        dataToSend.carMaxSpeed = 20;
-        dataToSend.armMaxSpeed = 10;
-        dataToSend.chassisControlArmHorizontal = 0;
-        dataToSend.chassisControlArmVertical = 0;
-        dataToSend.chassisPower = 0b1010001;
-        dataToSend.frontArmAngle = 0;
-        dataToSend.behindArmAngle = 0;
-        dataToSend.dataDestruction = 0;
-        dataToSend.reserved = 0;
-
-
-        // dataToSend.vel = vel;
-        // dataToSend.cur = cur;
-        // dataToSend.pitch = pitch;
-
+        dataToSend.driveGear = 0b0101;             //驱动抵挡、摆臂低档
+        dataToSend.driveMode = 0b01;               //自主模式
+        dataToSend.carMaxSpeed = 20;               //固定值
+        dataToSend.armMaxSpeed = 10;               //固定值
+        dataToSend.chassisControlArmHorizontal = 0;//摇杆归零
+        dataToSend.chassisControlArmVertical = 0;  //摇杆归零
+        dataToSend.chassisPower = 0b1010001;       //强电上电、底盘使能、自主系统上电
+        dataToSend.frontArmAngle = 0;              //前摆臂零度
+        dataToSend.behindArmAngle = 0;             //后摆逼零度
+        dataToSend.dataDestruction = 0;            //固定值
+        dataToSend.reserved = 0;                   //固定值
+        dataToSend.checkSum = 0;                   //赋初值
 
         uint16_t checkSum = 0;
 
-        memset(&sendBuffer[0], 0, sizeof(sendBuffer));
-        memcpy(&sendBuffer[0], &dataToSend, 18);
-
+        memset(&sendBuffer[0], 0, sizeof(sendBuffer));//缓冲区初始化
+        memcpy(&sendBuffer[0], &dataToSend, 19);      //将发送的数据存到缓冲区
+        // 校验和为前面数据累加和
         for (int i = 0; i < 18; i++) {
             checkSum += sendBuffer[i];
         }
 
-        sendBuffer[18] = checkSum & 0xff;
+        sendBuffer[18] = checkSum & 0xff;//只保存低八位
+        //发送数据
+        sendto(sockfd, &sendBuffer[0], 19, 0, reinterpret_cast<const struct sockaddr *>(&serverAddr), sizeof(serverAddr));
 
-        sendto(sockfd, &sendBuffer[0], 19, 0, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
-
-        // 延迟100毫秒
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000 * 1));
+        // 延迟50毫秒
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -137,59 +98,24 @@ void receiveThread(int sockfd) {
         struct sockaddr_in clientAddr;
         socklen_t addr_len = sizeof(clientAddr);
 
-        memset(&recvBuffer[0], 0, sizeof(recvBuffer));
+        memset(&recvBuffer[0], 0, sizeof(recvBuffer));//缓冲区初始化
         // 接收数据
-        std::cout << "/* sizeof recvBuffer */" << sizeof(recvBuffer) << std::endl;
-        recvfrom(sockfd, &recvBuffer[0], 16, 0, (struct sockaddr *) &clientAddr, &addr_len);
-        std::cout << "/* message!!! */" << std::endl;
-
-        std::cout << "voltage: " << 0.25 * recvBuffer[6] << std::endl;
-        //        std::cout << "0:  " << recvBuffer[0] * 1 << std::endl;
-        //        std::cout << "1:  " << recvBuffer[1] * 1 << std::endl;
-        //        std::cout << "2:  " << recvBuffer[2] * 1 << std::endl;
-        //        std::cout << "3:  " << recvBuffer[3] * 1 << std::endl;
-        //        std::cout << "4:  " << recvBuffer[4] * 1 << std::endl;
-        //        std::cout << "5:  " << recvBuffer[5] * 1 << std::endl;
-        //        std::cout << "6:  " << recvBuffer[6] * 1 << std::endl;
-        //        std::cout << "7:  " << recvBuffer[7] * 1 << std::endl;
-        //        std::cout << "8:  " << recvBuffer[8] * 1 << std::endl;
-        //        std::cout << "9:  " << recvBuffer[9] * 1 << std::endl;
-        //        std::cout << "10:  " << recvBuffer[10] * 1 << std::endl;
-        //        std::cout << "11:  " << recvBuffer[11] * 1 << std::endl;
-        //        std::cout << "12:  " << recvBuffer[12] * 1 << std::endl;
-        // uint16_t checkSum = 0;
-        // for (int i = 0; i < 15; i++)
-        // {
-        //     checkSum += recvBuffer[i];
-        // }
-        // checkSum=checkSum&0xff;
-        // std::cout << "/* message */" <<checkSum<< std::endl;
-        // if ((int)recvBuffer[15] == (int)(checkSum ))
-        // {
+        recvfrom(sockfd, &recvBuffer[0], 11, 0, reinterpret_cast<struct sockaddr *>(&clientAddr), &addr_len);
 
         UdpRecvCommand receivedData;
-        memcpy(&receivedData, &recvBuffer[0], 9);
-        // std::cout << "1:  " << std::hex << static_cast<int>(receivedData.mHeader.mFrameHeader) << std::endl;
-        // std::cout << "2:  " << static_cast<int>(receivedData.mHeader.mFrameType) << std::endl;
-        // std::cout << "3:  " << std::dec << static_cast<int>(receivedData.mHeader.mFrameLength) << std::endl;
-        // std::cout << "4:  " << static_cast<int>(receivedData.carDriveState) << std::endl;
-        // std::cout << "5:  " << static_cast<int>(receivedData.carSpeed) << std::endl;
-        // std::cout << "6:  " << static_cast<int>(receivedData.batteryVoltage) << std::endl;
-        // std::cout << "7:  " << static_cast<int>(receivedData.batterySoc) << std::endl;
-        // std::cout << "8:  " << static_cast<int>(receivedData.carDriveMode) << std::endl;
-        // std::cout << "9:  " << static_cast<int>(receivedData.batteryCircuit) << std::endl;
-
-
-        //  std::cout << "10:  " << static_cast<int>(receivedData.batteryMaxTemperature) << std::endl;
-        // std::cout << "11:  " << static_cast<int>(receivedData.batteryMinVoltage) << std::endl;
-        // std::cout << "12:  " << static_cast<int>(receivedData.batteryWarning1) << std::endl;
-        // std::cout << "13:  " << static_cast<int>(receivedData.batterySuperMode) << std::endl;
-        // std::cout << "14:  " << static_cast<int>(receivedData.batteryWarning2) << std::endl;
-        // std::cout << "15:  " << static_cast<int>(receivedData.electrifyCommand) << std::endl;
-        // std::cout << "16:  " << static_cast<int>(receivedData.chassisControlArmHorizontal) << std::endl;
-        // std::cout << "17:  " << static_cast<int>(receivedData.chassisControlArmVertical) << std::endl;
-
-        // }
+        memcpy(&receivedData, &recvBuffer[0], 11);//将缓冲区数据取出
+        //打印输出
+        std::cout << "/* sizeof recvBuffer */" << sizeof(recvBuffer) << std::endl;
+        std::cout << "/* message!!! */" << std::endl;
+        std::cout << "1:  " << std::hex << static_cast<int>(receivedData.mHeader.mFrameHeader) << std::endl;
+        std::cout << "2:  " << static_cast<int>(receivedData.mHeader.mFrameType) << std::endl;
+        std::cout << "3:  " << std::dec << static_cast<int>(receivedData.mHeader.mFrameLength) << std::endl;
+        std::cout << "4:  " << static_cast<int>(receivedData.carDriveState) << std::endl;
+        std::cout << "5:  " << static_cast<int>(receivedData.carSpeed) << std::endl;
+        std::cout << "6:  " << static_cast<int>(receivedData.batteryVoltage) << std::endl;
+        std::cout << "7:  " << static_cast<int>(receivedData.batterySoc) << std::endl;
+        std::cout << "8:  " << static_cast<int>(receivedData.carDriveMode) << std::endl;
+        std::cout << "9:  " << static_cast<int>(receivedData.batteryCircuit) << std::endl;
     }
 }
 
@@ -210,16 +136,6 @@ int main() {
         perror("Error in socket creation for receiving");
         exit(1);
     }
-    //sun20240623duankoufuyong//
-    // int opt=1;
-    // int ret=setsockopt(sendSockfd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(int));
-    // if(ret==-1)
-    // {
-    //     printf("setsockopt");
-    //     exit(1);
-
-    // }
-    // duankoufuyong
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(SEND_PORT);
@@ -227,33 +143,15 @@ int main() {
 
     receiveAddr.sin_family = AF_INET;
     receiveAddr.sin_port = htons(RECEIVE_PORT);
-    receiveAddr.sin_addr.s_addr = inet_addr("192.2.2.40");
+    receiveAddr.sin_addr.s_addr = inet_addr(CLIENT_IP);
 
     //绑定接收端口
-
-
-    if (bind(sendSockfd, (struct sockaddr *) &receiveAddr, sizeof(receiveAddr)) < 0) {
+    if (bind(sendSockfd, reinterpret_cast<struct sockaddr *>(&receiveAddr), sizeof(receiveAddr)) < 0) {
         perror("Error in binding for sending");
         exit(1);
     }
 
-
-    int16_t vel = 0x64;
-    int16_t cur = 0;
-    int16_t pitch = 0;
-
-    uint8_t driveGear;
-    uint8_t driveMode;
-    uint8_t carMaxSpeed;
-    uint8_t armMaxSpeed;
-    uint8_t chassisControlArmHorizontal;
-    uint8_t chassisControlArmVertical;
-    uint8_t chassisPower;
-    uint16_t frontArmAngle;
-    uint16_t behindArmAngle;
-
-    // std::thread sender(sendThread, sendSockfd, vel, cur, pitch, serverAddr);
-    std::thread sender(sendThread, sendSockfd, /*driveGear, driveMode, carMaxSpeed, armMaxSpeed, chassisControlArmHorizontal, chassisControlArmVertical, chassisPower, frontArmAngle, behindArmAngle,*/ serverAddr);
+    std::thread sender(sendThread, sendSockfd, serverAddr);
 
     std::thread receiver(receiveThread, sendSockfd);
 
