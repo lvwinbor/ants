@@ -1,9 +1,91 @@
-#include "ants_paths_follower/liner_speed_regulator.h"
+#include "ants_paths_follower/Array.h"
+#include "ants_paths_follower/cubic_spline.h"
+
+#include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/Twist.h"
+#include "nav_msgs/Odometry.h"
+#include "nav_msgs/Path.h"
+#include "ros/ros.h"
+#include "tf/transform_datatypes.h"
+#include <queue>
+#include <time.h>
+// #include "quadprog/QuadProg++.h"
+#include "common_private_msgs/planning_info.h"
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
+#include "math.h"
+#include <array>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
+#include <vector>
+// #include <ants_local_planner/cubic_spline.h>
+
+#include <std_msgs/Float64.h>
+
+#include <std_msgs/Float32.h>
+// #include <proto/fm.pb.h>
+#include <fstream>
+
+// launch info
+int ID;
+double headway, current_headway, time_headway;
+double vmin, vmax, wmin, wmax;// 分别为v和w的控制量最小值最大值
+double overall_length;
+double emlike_hz;
+double Kp, Ki, Kd;
+double max_deceleration, max_acceleration;
+double Kp2, Ki2, Kd2;// for other formation to use
+double wheel_base;
+double vy = 0.0;
+double vx;
+double cf, cr, m, a, b, Iz;
+double forecast_time;
+double Q1, Q2, Q3, Q4, lqrR;
+int formation_type;
+int controller_type = 1;
+double Kp1, Kd1;// controller2
+
+// joint function
+int match_index;
+// reconfiguration function
+std::vector<std::pair<int, nav_msgs::Odometry>> pList(5);
+int reconfiguration_flag;// 0-no, 1-add, 2-quit, 3-the add one. 4-after the add one one
+int last_reconfiguration_flag;
+ros::Time tick1;// quit start clock
+double reconfiguration_duration;
+double add_lateral_threshold, add_yaw_threshold;
+std::deque<int> add_keeper;
+
+// ros related
+common_private_msgs::vehicle_status front_pos;
+common_private_msgs::vehicle_status leader_pos;
+common_private_msgs::vehicle_status now_pos;
+CSRefPath refTrajectory;
+
+// for rviz
+nav_msgs::Path Trajectory;
+ros::Publisher Vis_traj;
+
+ros::Publisher cmd_pub;
+ros::Publisher cmd_pub2;
+// debug related
+ros::Publisher gap_plot_pub;
+std::ofstream tum_pose;
+
+//longitude pid struct
+struct pidKit {
+    double error_sum;
+    double last_error;
+    ros::Time last_time;
+    double last_speed;
+};
 
 
 int findMatchpoint(double x, double y);
 
-bool LinerSpeedRegulator::add_lateral_check(common_private_msgs::vehicle_status &last_front) {
+bool add_lateral_check(common_private_msgs::vehicle_status &last_front) {
     if (abs(last_front.yaw - M_PI / 2) < 1e-6 || abs(last_front.yaw + M_PI / 2) < 1e-6) {
         double lateral_error = abs(last_front.xPos - front_pos.xPos);
         ROS_WARN("[em_like]: add_recfg lateral_error = %f(%f)", lateral_error, add_lateral_threshold);
@@ -25,7 +107,7 @@ bool LinerSpeedRegulator::add_lateral_check(common_private_msgs::vehicle_status 
     }
     return true;
 }
-bool LinerSpeedRegulator::add_yaw_check(common_private_msgs::vehicle_status &last_front) {
+bool add_yaw_check(common_private_msgs::vehicle_status &last_front) {
     double yaw_error = abs(last_front.yaw - front_pos.yaw);
     ROS_WARN("[em_like]: add_recfg yaw_error = %f(%f)", yaw_error, add_yaw_threshold);
     if (yaw_error > add_yaw_threshold) {
@@ -34,7 +116,7 @@ bool LinerSpeedRegulator::add_yaw_check(common_private_msgs::vehicle_status &las
         return true;
     }
 }
-bool LinerSpeedRegulator::add_check(common_private_msgs::vehicle_status &last_front) {
+bool add_check(common_private_msgs::vehicle_status &last_front) {
     while (add_keeper.size() > 5) {
         add_keeper.pop_front();
     }
@@ -47,11 +129,11 @@ bool LinerSpeedRegulator::add_check(common_private_msgs::vehicle_status &last_fr
     }
 }
 
-void LinerSpeedRegulator::formationCallback(const geometry_msgs::Point::ConstPtr &formation_msg) {
+void formationCallback(const geometry_msgs::Point::ConstPtr &formation_msg) {
     formation_type = formation_msg->x;
 }
 
-void LinerSpeedRegulator::ReconfigurationCallback(const geometry_msgs::Point::ConstPtr &reconstruction_msg) {// x: 1-add, 2-quit, y: ID
+void ReconfigurationCallback(const geometry_msgs::Point::ConstPtr &reconstruction_msg) {// x: 1-add, 2-quit, y: ID
     int mode = reconstruction_msg->x;
     int reID = reconstruction_msg->y;
     if (mode == 1) {
@@ -78,7 +160,7 @@ void LinerSpeedRegulator::ReconfigurationCallback(const geometry_msgs::Point::Co
     }
 }
 
-bool LinerSpeedRegulator::GetVehicleInfo(int index, common_private_msgs::vehicle_status &out) {
+bool GetVehicleInfo(int index, common_private_msgs::vehicle_status &out) {
     if (pList[index].first == 0) {
         // printf("[em_like]: get %i info failed\n", index);
         return false;
@@ -95,61 +177,60 @@ bool LinerSpeedRegulator::GetVehicleInfo(int index, common_private_msgs::vehicle
     return true;
 }
 
-void LinerSpeedRegulator::ClearpList() {
+void ClearpList() {
     for (auto &x: pList) {
         x.first = 0;
     }
 }
 
-void LinerSpeedRegulator::Platoon0Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
+void Platoon0Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
     int idx = 0;
     pList[idx].first = 1;
     pList[idx].second = *p_msg;
 }
-void LinerSpeedRegulator::Platoon1Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
+void Platoon1Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
     int idx = 1;
     pList[idx].first = 1;
     pList[idx].second = *p_msg;
 }
-void LinerSpeedRegulator::Platoon2Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
+void Platoon2Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
     int idx = 2;
     pList[idx].first = 1;
     pList[idx].second = *p_msg;
 }
-void LinerSpeedRegulator::Platoon3Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
+void Platoon3Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
     int idx = 3;
     pList[idx].first = 1;
     pList[idx].second = *p_msg;
 }
-void LinerSpeedRegulator::Platoon4Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
+void Platoon4Callback(const nav_msgs::Odometry::ConstPtr &p_msg) {
     int idx = 4;
     pList[idx].first = 1;
     pList[idx].second = *p_msg;
 }
 
-void LinerSpeedRegulator::refTrajCallback(const common_private_msgs::planning_info::ConstPtr &trajectory_msg) {
+void refTrajCallback(const common_private_msgs::planning_info::ConstPtr &trajectory_msg) {
     refTrajectory.CSclear();
     if (trajectory_msg->states.empty()) {
         return;
     }
-    refTrajectory.r_path.reserve(static_cast<int>(trajectory_msg->states.size()));
-    for (int i = 0; i < trajectory_msg->states.size(); ++i) {
-        refTrajectory.r_path[i].r_yaw = trajectory_msg->states[i].yaw;
-        refTrajectory.r_path[i].r_curvature = trajectory_msg->states[i].angular_speed;
-        refTrajectory.r_path[i].r_x = trajectory_msg->states[i].xPos;
-        refTrajectory.r_path[i].r_y = trajectory_msg->states[i].yPos;
-        refTrajectory.r_path[i].r_s = trajectory_msg->states[i].liner_speed;
+    for (auto p: trajectory_msg->states) {
+        refTrajectory.r_curvature.emplace_back(p.angular_speed);
+        refTrajectory.r_x.emplace_back(p.xPos);
+        refTrajectory.r_y.emplace_back(p.yPos);
+        refTrajectory.r_yaw.emplace_back(p.yaw);
+        refTrajectory.r_s.emplace_back(p.liner_speed);
     }
-    printf("[em_like]: trajectory first s = %f, final s = %f\n", refTrajectory.r_path[0].r_s, refTrajectory.r_path.back().r_s);
+    printf("[em_like]: trajectory first s = %f, final s = %f\n", refTrajectory.r_s[0], refTrajectory.r_s.back());
 }
 
-void LinerSpeedRegulator::GapPlot(double error) {
+void GapPlot(double error) {
     std_msgs::Float64 gap_plot_msg;
     gap_plot_msg.data = error;
     gap_plot_pub.publish(gap_plot_msg);
 }
 
-void LinerSpeedRegulator::ModifyHeadway() {
+void ModifyHeadway() {
     common_private_msgs::vehicle_status last_front;
     // std::cout << "ID - 2 = " << ID - 2 << std::endl;
     // ROS_FATAL("reconfiguration_flag = %i", reconfiguration_flag);
@@ -189,12 +270,12 @@ void LinerSpeedRegulator::ModifyHeadway() {
     }
 }
 
-double LinerSpeedRegulator::speed_control_1(pidKit &kit1) {
+double speed_control_1(pidKit &kit1) {
     // dd=d_min; // 1.constant
     // dd=d_min+h_s*myselfcar.Velocity.v; // 2.+speed
     // dd=d_min+h_s*myselfcar.Velocity.v+G_s*std::pow(myselfcar.Velocity.v,2); // 3.+a
 
-    double current_gap = refTrajectory.r_path.back().r_s - refTrajectory.r_path[match_index].r_s;
+    double current_gap = refTrajectory.r_s.back() - refTrajectory.r_s[match_index];
     double pid_speed;
     double euclidian_distance = sqrt(pow(front_pos.xPos - now_pos.xPos, 2) + pow(front_pos.yPos - now_pos.yPos, 2));
     if (!formation_type) {
@@ -215,7 +296,7 @@ double LinerSpeedRegulator::speed_control_1(pidKit &kit1) {
         double error = current_gap - overall_length;
         pid_speed = leader_pos.liner_speed + Kp2 * error;
         std::cout << "[emlike]: leaderspeed: " << leader_pos.liner_speed << ", Kp2*error: " << Kp2 * error << std::endl;
-        std::cout << "[emlike]: target x: " << refTrajectory.r_path.back().r_x << ", y: " << refTrajectory.r_path.back().r_y << ", current_gap= " << current_gap << ", error=" << error << std::endl;
+        std::cout << "[emlike]: target x: " << refTrajectory.r_x.back() << ", y: " << refTrajectory.r_y.back() << ", current_gap= " << current_gap << ", error=" << error << std::endl;
         std::cout << "[emlike]: leader speed : " << leader_pos.liner_speed << ", ego speed : " << now_pos.liner_speed << ", raw pid_speed = " << pid_speed << std::endl;
         GapPlot(error);
         // tum_pose << std::fixed << std::setprecision(3) << error << " ";
@@ -238,9 +319,9 @@ double LinerSpeedRegulator::speed_control_1(pidKit &kit1) {
     return pid_speed;
 }
 
-double LinerSpeedRegulator::speed_control_2(pidKit &kit2) {
-    double current_gap = refTrajectory.r_path.back().r_s - refTrajectory.r_path[match_index].r_s;
-    std::cout << "frenet_s = " << refTrajectory.r_path[match_index].r_s << "final s = " << refTrajectory.r_path.back().r_s << std::endl;
+double speed_control_2(pidKit &kit2) {
+    double current_gap = refTrajectory.r_s.back() - refTrajectory.r_s[match_index];
+    std::cout << "frenet_s = " << refTrajectory.r_s[match_index] << "final s = " << refTrajectory.r_s.back() << std::endl;
     double output_speed, control_error, control_error_d;
     if (!formation_type) {
         control_error = current_gap - current_headway;
@@ -269,7 +350,7 @@ double LinerSpeedRegulator::speed_control_2(pidKit &kit2) {
     return output_speed;
 }
 
-double LinerSpeedRegulator::calc_speed(int mode, pidKit &kit1, pidKit &kit2) {
+double calc_speed(int mode, pidKit &kit1, pidKit &kit2) {
     if (mode == 1) {
         return speed_control_1(kit1);
     } else if (mode == 2) {
@@ -286,12 +367,12 @@ double LinerSpeedRegulator::calc_speed(int mode, pidKit &kit1, pidKit &kit2) {
 //     return position;
 // }
 
-int LinerSpeedRegulator::findMatchpoint(double x, double y) {
-    int num = refTrajectory.r_path.size();
+int findMatchpoint(double x, double y) {
+    int num = refTrajectory.r_curvature.size();
     double dis_min = std::numeric_limits<double>::max();
     int index = 0;
     for (int i = 0; i < num; ++i) {
-        double temp_dis = std::pow(refTrajectory.r_path[i].r_x - x, 2) + std::pow(refTrajectory.r_path[i].r_y - y, 2);
+        double temp_dis = std::pow(refTrajectory.r_x[i] - x, 2) + std::pow(refTrajectory.r_y[i] - y, 2);
         //ROS_ERROR("%s,%f.%s,%f","r_x",r_x[i],"r_y",r_y[i]);
         //ROS_ERROR("%s,%f","distance",temp_dis);
         if (temp_dis < dis_min) {
@@ -510,8 +591,8 @@ int LinerSpeedRegulator::findMatchpoint(double x, double y) {
 //     return lqr_delta;
 // }
 
-void LinerSpeedRegulator::EM(pidKit &kit1, pidKit &kit2) {
-    if (refTrajectory.r_path.empty()) {
+void EM(pidKit &kit1, pidKit &kit2) {
+    if (refTrajectory.r_s.empty()) {
         ROS_WARN("[emlike]: NO trajectory of spline");
         geometry_msgs::Twist cmd_vel;
         cmd_vel.linear.x = 0.0;
@@ -590,9 +671,32 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "EMcontroller_node");
     ros::NodeHandle nh;
     ros::NodeHandle nhPrivate = ros::NodeHandle("~");
-    LinerSpeedRegulator regulator;
-    regulator.spin();
 
+    nhPrivate.getParam("ID", ID);
+    nhPrivate.getParam("Kp", Kp);
+    nhPrivate.getParam("Ki", Ki);
+    nhPrivate.getParam("Kd", Kd);
+    nhPrivate.getParam("Kp2", Kp2);
+    nhPrivate.getParam("Ki2", Ki2);
+    nhPrivate.getParam("Kd2", Kd2);
+    nhPrivate.getParam("Kp1", Kp1);
+    nhPrivate.getParam("Kd1", Kd1);
+    nhPrivate.getParam("overall_length", overall_length);
+    nhPrivate.getParam("formation_type", formation_type);
+    nhPrivate.getParam("controller_type", controller_type);
+    nhPrivate.getParam("headway", headway);
+    current_headway = headway;
+    // current_headway = 3;
+    nhPrivate.getParam("emlike_hz", emlike_hz);
+    nhPrivate.getParam("add_lateral_threshold", add_lateral_threshold);
+    nhPrivate.getParam("add_yaw_threshold", add_yaw_threshold);
+    nhPrivate.getParam("vmin", vmin);
+    nhPrivate.getParam("vmax", vmax);
+    // vmax = 2.0;
+    nhPrivate.getParam("max_deceleration", max_deceleration);
+    nhPrivate.getParam("max_acceleration", max_acceleration);
+    nhPrivate.getParam("forecast_time", forecast_time);
+    nhPrivate.getParam("reconfiguration_duration", reconfiguration_duration);
 
     // nh.param<int>("ID", ID, 1);
     // nh.param<double>("overall_length", overall_length, 0.6);
@@ -631,6 +735,22 @@ int main(int argc, char **argv) {
     // nh.getParam("reconfiguration_duration", reconfiguration_duration);
 
 
+    Vis_traj = nh.advertise<nav_msgs::Path>("VisTraj", 100);
+    cmd_pub = nh.advertise<geometry_msgs::Twist>("speed2", 20);
+    cmd_pub2 = nh.advertise<std_msgs::Float32>("speed", 20);
+    gap_plot_pub = nh.advertise<std_msgs::Float64>("gap", 20);
+
+    ros::Subscriber formation_sub = nh.subscribe("/formationType", 1, formationCallback);
+    ros::Subscriber reconfiguration_sub = nh.subscribe("/reID", 1, ReconfigurationCallback);
+
+    ros::Subscriber platoon0_sub = nh.subscribe("/ant01/state_estimation", 5, Platoon0Callback);
+    ros::Subscriber platoon1_sub = nh.subscribe("/ant02/state_estimation", 5, Platoon1Callback);
+    ros::Subscriber platoon2_sub = nh.subscribe("/ant03/state_estimation", 5, Platoon2Callback);
+    ros::Subscriber platoon3_sub = nh.subscribe("/ant04/state_estimation", 5, Platoon3Callback);
+    ros::Subscriber platoon4_sub = nh.subscribe("/ant05/state_estimation", 5, Platoon4Callback);
+
+    ros::Subscriber mypathpose = nh.subscribe("trajectory_cubic_spline", 10, refTrajCallback);
+
     // std::string myFileName = " ";
     // myFileName = "shiyan_" + std::to_string(ID) + ".txt";//存储数据的文件名
     // tum_pose.open(ROOT_DIR + myFileName);
@@ -640,61 +760,11 @@ int main(int argc, char **argv) {
     //     return 0;
     // }
 
-
-    // tum_pose.close();
-    return 0;
-}
-LinerSpeedRegulator::LinerSpeedRegulator() {
-    nhPrivate.getParam("ID", ID);
-    nhPrivate.getParam("Kp", Kp);
-    nhPrivate.getParam("Ki", Ki);
-    nhPrivate.getParam("Kd", Kd);
-    nhPrivate.getParam("Kp2", Kp2);
-    nhPrivate.getParam("Ki2", Ki2);
-    nhPrivate.getParam("Kd2", Kd2);
-    nhPrivate.getParam("Kp1", Kp1);
-    nhPrivate.getParam("Kd1", Kd1);
-    nhPrivate.getParam("overall_length", overall_length);
-    nhPrivate.getParam("formation_type", formation_type);
-    nhPrivate.getParam("controller_type", controller_type);
-    nhPrivate.getParam("headway", headway);
-    current_headway = headway;
-    // current_headway = 3;
-    nhPrivate.getParam("emlike_hz", emlike_hz);
-    nhPrivate.getParam("add_lateral_threshold", add_lateral_threshold);
-    nhPrivate.getParam("add_yaw_threshold", add_yaw_threshold);
-    nhPrivate.getParam("vmin", vmin);
-    nhPrivate.getParam("vmax", vmax);
-    // vmax = 2.0;
-    nhPrivate.getParam("max_deceleration", max_deceleration);
-    nhPrivate.getParam("max_acceleration", max_acceleration);
-    nhPrivate.getParam("forecast_time", forecast_time);
-    nhPrivate.getParam("reconfiguration_duration", reconfiguration_duration);
-
-    pList.reserve(5);
-
-
-    Vis_traj = nh.advertise<nav_msgs::Path>("VisTraj", 100);// 视觉轨迹
-    cmd_pub = nh.advertise<geometry_msgs::Twist>("speed2", 20);
-    cmd_pub2 = nh.advertise<std_msgs::Float32>("speed", 20);
-    gap_plot_pub = nh.advertise<std_msgs::Float64>("gap", 20);
-
-    formation_sub = nh.subscribe("/formationType", 1, &LinerSpeedRegulator::formationCallback, this);
-    reconfiguration_sub = nh.subscribe("/reID", 1, &LinerSpeedRegulator::ReconfigurationCallback, this);
-
-    platoon0_sub = nh.subscribe("/ant01/state_estimation", 5, &LinerSpeedRegulator::Platoon0Callback, this);
-    platoon1_sub = nh.subscribe("/ant02/state_estimation", 5, &LinerSpeedRegulator::Platoon1Callback, this);
-    platoon2_sub = nh.subscribe("/ant03/state_estimation", 5, &LinerSpeedRegulator::Platoon2Callback, this);
-    platoon3_sub = nh.subscribe("/ant04/state_estimation", 5, &LinerSpeedRegulator::Platoon3Callback, this);
-    platoon4_sub = nh.subscribe("/ant05/state_estimation", 5, &LinerSpeedRegulator::Platoon4Callback, this);
-
-    mypathpose = nh.subscribe("trajectory_cubic_spline", 10, &LinerSpeedRegulator::refTrajCallback, this);
-
-
+    pidKit kit1{0.0, 0.0, ros::Time::now(), 0.0};
+    pidKit kit2{0.0, 0.0, ros::Time::now(), 0.0};
     max_deceleration /= emlike_hz;
     max_acceleration /= emlike_hz;
-}
-void LinerSpeedRegulator::spin() {
+
     ros::Rate loop_rate(emlike_hz);
     while (ros::ok()) {
         reconfiguration_flag = 0;
@@ -719,4 +789,6 @@ void LinerSpeedRegulator::spin() {
 
         loop_rate.sleep();
     }
+    // tum_pose.close();
+    return 0;
 }

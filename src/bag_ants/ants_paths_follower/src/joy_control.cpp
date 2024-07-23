@@ -1,16 +1,28 @@
+#include <common_private_msgs/controlMessage.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
 
-geometry_msgs::TwistStamped cmd_vel_;
-const int maxSpeed = 20;
-const int maxAngular = 5;
 
+common_private_msgs::controlMessage joyCommand;
+const int maxSpeed = 1;
+const int maxAngular = 2;
 void joystickHandler(const sensor_msgs::Joy::ConstPtr &joy) {
+    //axes数据为float
+    //buttons数据为int
+
+    joyCommand.linearVelocity = joy->axes[1] * maxSpeed;
+    joyCommand.yawVelocity = joy->axes[0] * maxAngular;
+    static bool joyMode = false;
+    static bool lastButtonState = false;//按键上一个状态
+    bool currentButtonState = static_cast<bool>(joy->buttons[11]);
+    if (!currentButtonState && lastButtonState) {//当按键从1变为0，才进行模式切换
+        joyMode = !joyMode;
+    }
+    joyCommand.joyControlMode = joyMode;
+    lastButtonState = currentButtonState;//更新上一个状态
 
 
-    cmd_vel_.twist.linear.x = joy->axes[1] * maxSpeed;
-    cmd_vel_.twist.angular.z = joy->axes[0] * maxAngular;
     //   joyTime = ros::Time::now().toSec();//获取当前时间
 
     //   joySpeedRaw = sqrt(joy->axes[3] * joy->axes[3] + joy->axes[4] * joy->axes[4]);//使用操纵杆上的轴（axes[3] 和 axes[4]）计算原始速度。这通常是通过操纵杆的倾斜程度来实现的
@@ -36,12 +48,12 @@ int main(int argc, char *argv[]) {
     ros::init(argc, argv, "joy_control");
     // ros::NodeHandle nh("~");
     ros::NodeHandle nh;
-    ros::Subscriber subJoystick = nh.subscribe<sensor_msgs::Joy>("joy", 5, &joystickHandler);
-    ros::Publisher pubSpeed = nh.advertise<geometry_msgs::TwistStamped>("cmd_vel", 5);//将速度发布到cmd_vel中
+    ros::Subscriber subJoystick = nh.subscribe<sensor_msgs::Joy>("joy", 1, &joystickHandler);
+    ros::Publisher pubJoystick = nh.advertise<common_private_msgs::controlMessage>("joyCommand", 1);//将速度发布到cmd_vel中
     ros::Rate rate(100);
     while (ros::ok()) {
         ros::spinOnce();
-        pubSpeed.publish(cmd_vel_);
+        pubJoystick.publish(joyCommand);
         rate.sleep();
     }
 }

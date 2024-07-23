@@ -15,6 +15,8 @@ add_message_files(
   vehicle_param.msg
   vehicle_status.msg
   planning_info.msg
+  controlMessage.msg
+  
 )
 
 generate_messages(

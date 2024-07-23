@@ -77,7 +77,7 @@ private://函数
             return paramValue;
         } else {
             std::cerr << "Failed to get param" << paramName << std::endl;
-            exit(2);
+            exit(4);
         }
     }
 

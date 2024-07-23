@@ -98,7 +98,7 @@ void UdpRemote::creatUdpSocket() {
     receiveSockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (receiveSockfd < 0) {
         perror("Error in socket creation for receiving");
-        exit(1);
+        exit(2);
     }
 
     serverAddr.sin_family = AF_INET;
@@ -112,7 +112,7 @@ void UdpRemote::creatUdpSocket() {
     //感觉有问题但不建议改动
     if (bind(sendSockfd, reinterpret_cast<struct sockaddr *>(&receiveAddr), sizeof(receiveAddr)) < 0) {
         perror("Remote: Error in binding for receiving");
-        exit(1);
+        exit(3);
     }
 }
 //静态成员变量类外初始化

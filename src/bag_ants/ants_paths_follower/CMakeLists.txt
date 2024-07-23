@@ -29,6 +29,7 @@ catkin_package(
         sensor_msgs
         pcl_ros
         geometry_msgs
+        common_private_msgs
 )
 
 ###########
@@ -51,21 +52,24 @@ add_library(cs_lib2 src/cubic_spline.cpp)
 
 add_executable(ants_paths_follower src/pathFollower.cpp)
 target_link_libraries(ants_paths_follower ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(ants_paths_follower common_private_msgs_generate_messages_cpp)
 
 add_executable(UdpRemote src/UdpRemote.cpp)
 target_link_libraries(UdpRemote ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(UdpVehicle src/UdpVehicle.cpp)
 target_link_libraries(UdpVehicle ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(UdpVehicle common_private_msgs_generate_messages_cpp)
 
  add_executable(joy_control src/joy_control.cpp)
  target_link_libraries(joy_control ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+ add_dependencies(joy_control common_private_msgs_generate_messages_cpp)
 
-add_executable(ants_paths_follower_swarm src/pathFollower_swarm.cpp)
-target_link_libraries(ants_paths_follower_swarm ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+# add_executable(ants_paths_follower_swarm src/pathFollower_swarm.cpp)
+# target_link_libraries(ants_paths_follower_swarm ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-add_executable(liner_speed_regulator src/liner_speed_regulator.cpp)
-target_link_libraries(liner_speed_regulator cs_lib2 ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+# add_executable(liner_speed_regulator src/liner_speed_regulator.cpp)
+# target_link_libraries(liner_speed_regulator cs_lib2 ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##

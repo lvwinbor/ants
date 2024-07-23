@@ -29,27 +29,26 @@ UdpVehicle::UdpVehicle() : nhPrivate("~"),
                            CLIENT_IP(getConstParam<std::string>("client_ip_Vehicle", nhPrivate)),
                            udpVehiclePrint(getConstParam<bool>("udpVehiclePrint", nhPrivate)) {
 
-    cmd_sub_ = nh.subscribe<geometry_msgs::TwistStamped>("cmd_vel", 5, &UdpVehicle::CmdCallback, this);
-    cmd_sub_joy = nh.subscribe<geometry_msgs::TwistStamped>("cmd_vel_joy", 5, &UdpVehicle::CmdCallback, this);
+    cmd_sub_ = nh.subscribe<common_private_msgs::controlMessage>("autonomyCommand", 5, &UdpVehicle::autonomyCallback, this);
+    cmd_sub_joy = nh.subscribe<common_private_msgs::controlMessage>("joyCommand", 1, &UdpVehicle::joyCallback, this);
     creatUdpSocket();
 }
-
-void UdpVehicle::CmdCallback(const geometry_msgs::TwistStamped::ConstPtr &cmd_vel_) {
+void UdpVehicle::callBack(const common_private_msgs::controlMessage::ConstPtr &command) {
     dataToSend.mHeader.mFrameHeader = 0xffcc;//固定值
     dataToSend.mHeader.mFrameType = 0x11;    //固定值
     dataToSend.mHeader.mFrameLength = 17;    //固定值
 
-    if (cmd_vel_->twist.linear.x == 0.0) {//中心转向，曲率绝对值的大小决定转向的速度
+    if (command->linearVelocity == 0.0) {//中心转向，曲率绝对值的大小决定转向的速度
         dataToSend.vel = 0;
-        dataToSend.cur = static_cast<int16_t>(cmd_vel_->twist.angular.z * 1000.0);
+        dataToSend.cur = static_cast<int16_t>(command->yawVelocity * 1000.0);
     } else {//非中心转向，曲率为半径倒数
-        dataToSend.vel = static_cast<int16_t>(cmd_vel_->twist.linear.x * 100.0);
-        dataToSend.cur = static_cast<int16_t>(cmd_vel_->twist.angular.z / cmd_vel_->twist.linear.x * 1000.0);
+        dataToSend.vel = static_cast<int16_t>(command->linearVelocity * 100.0);
+        dataToSend.cur = static_cast<int16_t>(command->yawVelocity / command->yawVelocity * 1000.0);
     }
 
     dataToSend.pitch = 0;//不控制俯仰角度
-    dataToSend.frontArm = 0;
-    dataToSend.behindArm = 0;
+    dataToSend.frontArm = command->frontArmAngle;
+    dataToSend.behindArm = command->rearArmAngle;
     dataToSend.flag = 0;    //自主模式
     dataToSend.checkSum = 0;//赋初值
 
@@ -65,6 +64,17 @@ void UdpVehicle::CmdCallback(const geometry_msgs::TwistStamped::ConstPtr &cmd_ve
     sendBuffer[16] = checkSum & 0xff;//只保存低八位
     //发送数据
     sendto(sendSockfd, &sendBuffer[0], 17, 0, reinterpret_cast<struct sockaddr *>(&serverAddr), sizeof(serverAddr));
+}
+
+void UdpVehicle::joyCallback(const common_private_msgs::controlMessage::ConstPtr &cmd) {
+    if (cmd->joyControlMode) {//处于手柄控制模式
+        callBack(cmd);
+    }
+}
+void UdpVehicle::autonomyCallback(const common_private_msgs::controlMessage::ConstPtr &cmd) {
+    if (!(cmd->joyControlMode)) {//处于自主模式
+        callBack(cmd);
+    }
 }
 
 //接收数据的函数
@@ -101,7 +111,7 @@ void UdpVehicle::creatUdpSocket() {
     receiveSockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (receiveSockfd < 0) {
         perror("Error in socket creation for receiving");
-        exit(1);
+        exit(2);
     }
 
     serverAddr.sin_family = AF_INET;
@@ -116,7 +126,7 @@ void UdpVehicle::creatUdpSocket() {
     //感觉有问题但不建议改动
     if (bind(sendSockfd, reinterpret_cast<struct sockaddr *>(&receiveAddr), sizeof(receiveAddr)) < 0) {
         perror("Vehicle: Error in binding for sending");
-        exit(1);
+        exit(3);
     }
 }
 //静态成员变量类外初始化

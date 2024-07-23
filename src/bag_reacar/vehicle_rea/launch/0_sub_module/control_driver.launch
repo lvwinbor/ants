@@ -1,35 +1,40 @@
 <launch>
     <arg name="send_port_Remote" default="8021"/>
     <arg name="receive_port_Remote" default="20033"/>
-    <arg name="send_port_vehicle" default="12345"/>
-    <arg name="receive_port_vehicle" default="123456"/>
+    <arg name="send_port_Vehicle" default="8021"/>
+    <arg name="receive_port_Vehicle" default="40021"/>
     <arg name="server_ip_Remote" default="192.2.2.21"/>
     <arg name="client_ip_Remote" default="192.2.2.40"/>
-    <arg name="server_ip_vehicle" default="127.0.0.5"/>
-    <arg name="client_ip_vehicle" default="127.0.0.6"/>
+    <arg name="server_ip_Vehicle" default="192.2.2.21"/>
+    <arg name="client_ip_Vehicle" default="192.2.2.22"/>
+    <arg name="udpVehiclePrint" default="false"/>
+    <arg name="udpRemotePrint" default="false"/>
 
     <node pkg="ants_paths_follower" type="UdpRemote" name="UdpRemote" output="screen" respawn="true">
       <param name="send_port_Remote" type="int" value="$(arg send_port_Remote)" />
       <param name="receive_port_Remote" type="int" value="$(arg receive_port_Remote)" />
       <param name="server_ip_Remote" type="string" value="$(arg server_ip_Remote)" />
       <param name="client_ip_Remote" type="string" value="$(arg client_ip_Remote)" />
+      <param name="udpRemotePrint" type="bool" value="$(arg udpRemotePrint)" />
     </node>
 
     <node pkg="ants_paths_follower" type="UdpVehicle" name="UdpVehicle" output="screen" required="true">
-      <param name="send_port_vehicle" type="int" value="$(arg send_port_vehicle)" />
-      <param name="receive_port_vehicle" type="int" value="$(arg receive_port_vehicle)" />
-      <param name="server_ip_vehicle" type="string" value="$(arg server_ip_vehicle)" />
-      <param name="client_ip_vehicle" type="string" value="$(arg client_ip_vehicle)" />
+      <param name="send_port_Vehicle" type="int" value="$(arg send_port_Vehicle)" />
+      <param name="receive_port_Vehicle" type="int" value="$(arg receive_port_Vehicle)" />
+      <param name="server_ip_Vehicle" type="string" value="$(arg server_ip_Vehicle)" />
+      <param name="client_ip_Vehicle" type="string" value="$(arg client_ip_Vehicle)" />
+      <param name="udpVehiclePrint" type="bool" value="$(arg udpVehiclePrint)" />
     </node>
 
-    <node pkg="ants_paths_follower" type="joy_control" name="joy_control" output="screen" required="true">
+    <node pkg="ants_paths_follower" type="joy_control" name="joy_control" output="screen">
     </node>
 
     
-  启动 joy_node 并设置设备参数
-  <node name="joy_node" pkg="joy" type="joy_node" output="screen">
-    <param name="dev" value="/dev/input/js0" />
-     <param name="deadzone" value="0.1" /> <!-- 死区值 -->
+  <node name="joy_node" pkg="joy" type="joy_node" output="screen" >
+    <param name="dev" type="string"  value="/dev/input/js0" />
+    <param name="deadzone" value="0" />
+    <param name="autorepeat_rate" value="100" />
+
   </node>
 
 </launch>

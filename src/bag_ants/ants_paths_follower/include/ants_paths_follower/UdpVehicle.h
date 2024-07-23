@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <common_private_msgs/controlMessage.h>
 #include <cstdint>
 #include <cstring>
 #include <geometry_msgs/TwistStamped.h>
@@ -70,7 +71,9 @@ public:                            //变量
 
 private://函数
     UdpVehicle();
-    void CmdCallback(const geometry_msgs::TwistStamped::ConstPtr &cmd_vel_);
+    void callBack(const common_private_msgs::controlMessage::ConstPtr &command);
+    void joyCallback(const common_private_msgs::controlMessage::ConstPtr &cmd);
+    void autonomyCallback(const common_private_msgs::controlMessage::ConstPtr &cmd);
     void creatUdpSocket();//创建udp连接
     // ros::NodeHandle类没有输入名字便能直接返回值的方法，const参数的列表初始化很不方便
     template<typename T>
@@ -80,7 +83,7 @@ private://函数
             return paramValue;
         } else {
             std::cerr << "Failed to get param" << paramName << std::endl;
-            exit(2);
+            exit(4);
         }
     }
 
