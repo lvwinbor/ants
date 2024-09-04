@@ -2,7 +2,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 cmake_minimum_required(VERSION 3.0.2)
 project(ants_paths_follower)
 
-set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 set(BUILD_STATIC_LIBS ON)
 set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -54,16 +54,30 @@ add_executable(ants_paths_follower src/pathFollower.cpp)
 target_link_libraries(ants_paths_follower ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 add_dependencies(ants_paths_follower common_private_msgs_generate_messages_cpp)
 
-add_executable(UdpRemote src/UdpRemote.cpp)
-target_link_libraries(UdpRemote ${catkin_LIBRARIES} ${PCL_LIBRARIES})
-
-add_executable(UdpVehicle src/UdpVehicle.cpp)
-target_link_libraries(UdpVehicle ${catkin_LIBRARIES} ${PCL_LIBRARIES})
-add_dependencies(UdpVehicle common_private_msgs_generate_messages_cpp)
+add_executable(rosUdpBridge src/rosUdpBridge.cpp)
+target_link_libraries(rosUdpBridge ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(rosUdpBridge common_private_msgs_generate_messages_cpp)
 
  add_executable(joy_control src/joy_control.cpp)
  target_link_libraries(joy_control ${catkin_LIBRARIES} ${PCL_LIBRARIES})
  add_dependencies(joy_control common_private_msgs_generate_messages_cpp)
+
+add_executable(climb src/climb.cpp)
+target_link_libraries(climb ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+add_executable(stairAlign src/stairAlign.cpp)
+target_link_libraries(stairAlign ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(stairAlign common_private_msgs_generate_messages_cpp)
+
+# add_executable(targetPoint src/targetPoint.cpp)
+# target_link_libraries(targetPoint ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+
+add_library(control src/control.cpp)
+
+add_executable(targetPoint src/targetPoint.cpp)
+target_link_libraries(targetPoint ${catkin_LIBRARIES} ${PCL_LIBRARIES} control)
+add_dependencies(targetPoint common_private_msgs_generate_messages_cpp)
 
 # add_executable(ants_paths_follower_swarm src/pathFollower_swarm.cpp)
 # target_link_libraries(ants_paths_follower_swarm ${catkin_LIBRARIES} ${PCL_LIBRARIES})

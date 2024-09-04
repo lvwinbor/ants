@@ -1,10 +1,23 @@
-#include <common_private_msgs/controlMessage.h>
+#include <common_private_msgs/joyMessage.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
 
 
-common_private_msgs::controlMessage joyCommand;
+bool toggleMode(bool &mode, const int buttonInput, bool &lastButtonState) {
+    // 获取当前按键状态
+    bool currentButtonState = static_cast<bool>(buttonInput);
+    // 按键从按下变为松开时切换模式
+    if (!currentButtonState && lastButtonState) {
+        mode = !mode;
+    }
+    // 更新上一个按键状态
+    lastButtonState = currentButtonState;
+    // 返回控制模式
+    return mode;
+}
+
+common_private_msgs::joyMessage joyCommand;
 const int maxSpeed = 1;
 const int maxAngular = 2;
 void joystickHandler(const sensor_msgs::Joy::ConstPtr &joy) {
@@ -12,36 +25,31 @@ void joystickHandler(const sensor_msgs::Joy::ConstPtr &joy) {
     //buttons数据为int
 
     joyCommand.linearVelocity = joy->axes[1] * maxSpeed;
-    joyCommand.yawVelocity = joy->axes[0] * maxAngular;
-    static bool joyMode = false;
-    static bool lastButtonState = false;//按键上一个状态
-    bool currentButtonState = static_cast<bool>(joy->buttons[11]);
-    if (!currentButtonState && lastButtonState) {//当按键从1变为0，才进行模式切换
-        joyMode = !joyMode;
+    joyCommand.yawVelocity = joy->axes[2] * maxAngular;
+    static bool joyControlMode = false;
+    static bool joyControlModeLast = false;
+    static bool remoteControlMode = false;
+    static bool remoteControlModeLast = false;
+    static bool armAngleToZero = false;
+    static bool armAngleToZeroLast = false;
+    if (joy->buttons[4] == 0 && joy->buttons[0] == 0) {
+        joyCommand.frontArmAngle = 0;
+    } else if (joy->buttons[4] == 1) {
+        joyCommand.frontArmAngle = 1;
+    } else {
+        joyCommand.frontArmAngle = -1;
     }
-    joyCommand.joyControlMode = joyMode;
-    lastButtonState = currentButtonState;//更新上一个状态
+    if (joy->buttons[3] == 0 && joy->buttons[1] == 0) {
+        joyCommand.rearArmAngle = 0;
+    } else if (joy->buttons[3] == 1) {
+        joyCommand.rearArmAngle = 1;
+    } else {
+        joyCommand.rearArmAngle = -1;
+    }
 
-
-    //   joyTime = ros::Time::now().toSec();//获取当前时间
-
-    //   joySpeedRaw = sqrt(joy->axes[3] * joy->axes[3] + joy->axes[4] * joy->axes[4]);//使用操纵杆上的轴（axes[3] 和 axes[4]）计算原始速度。这通常是通过操纵杆的倾斜程度来实现的
-    //   joySpeed = joySpeedRaw;
-    //   if (joySpeed > 1.0) joySpeed = 1.0;//速度比率
-    //   if (joy->axes[4] == 0) joySpeed = 0;
-    //   joyYaw = joy->axes[3];//转向比率
-    //   if (joySpeed == 0 && noRotAtStop) joyYaw = 0;//如果速度为零,并且不允许停车时转向,转向为0
-    // //不允许双向驱动情况下，如果输入手柄速度小于0，将其设置为0
-    //   if (joy->axes[4] < 0 && !twoWayDrive) {
-    //     joySpeed = 0;
-    //     joyYaw = 0;
-    //   }
-    //   //通过手柄切换手动/自主模式
-    //   if (joy->axes[2] > -0.1) {
-    //     autonomyMode = false;
-    //   } else {
-    //     autonomyMode = true;
-    //   }
+    joyCommand.joyControlMode = toggleMode(joyControlMode, joy->buttons[6], joyControlModeLast);
+    joyCommand.remoteControlMode = toggleMode(remoteControlMode, joy->buttons[7], remoteControlModeLast);
+    joyCommand.armAngleToZero = toggleMode(armAngleToZero, joy->buttons[11], armAngleToZeroLast);
 }
 
 int main(int argc, char *argv[]) {
@@ -49,7 +57,7 @@ int main(int argc, char *argv[]) {
     // ros::NodeHandle nh("~");
     ros::NodeHandle nh;
     ros::Subscriber subJoystick = nh.subscribe<sensor_msgs::Joy>("joy", 1, &joystickHandler);
-    ros::Publisher pubJoystick = nh.advertise<common_private_msgs::controlMessage>("joyCommand", 1);//将速度发布到cmd_vel中
+    ros::Publisher pubJoystick = nh.advertise<common_private_msgs::joyMessage>("joyCommand", 1);
     ros::Rate rate(100);
     while (ros::ok()) {
         ros::spinOnce();
