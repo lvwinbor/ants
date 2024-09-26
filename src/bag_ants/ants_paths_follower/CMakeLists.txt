@@ -49,6 +49,8 @@ link_directories(
         /usr/lib       # More usual location (e.g. when installing using a package)
 )
 add_library(cs_lib2 src/cubic_spline.cpp)
+add_library(control src/control.cpp)
+
 
 add_executable(ants_paths_follower src/pathFollower.cpp)
 target_link_libraries(ants_paths_follower ${catkin_LIBRARIES} ${PCL_LIBRARIES})
@@ -62,19 +64,6 @@ add_dependencies(rosUdpBridge common_private_msgs_generate_messages_cpp)
  target_link_libraries(joy_control ${catkin_LIBRARIES} ${PCL_LIBRARIES})
  add_dependencies(joy_control common_private_msgs_generate_messages_cpp)
 
-add_executable(climb src/climb.cpp)
-target_link_libraries(climb ${catkin_LIBRARIES} ${PCL_LIBRARIES})
-
-add_executable(stairAlign src/stairAlign.cpp)
-target_link_libraries(stairAlign ${catkin_LIBRARIES} ${PCL_LIBRARIES})
-add_dependencies(stairAlign common_private_msgs_generate_messages_cpp)
-
-# add_executable(targetPoint src/targetPoint.cpp)
-# target_link_libraries(targetPoint ${catkin_LIBRARIES} ${PCL_LIBRARIES})
-
-
-add_library(control src/control.cpp)
-
 add_executable(targetPoint src/targetPoint.cpp)
 target_link_libraries(targetPoint ${catkin_LIBRARIES} ${PCL_LIBRARIES} control)
 add_dependencies(targetPoint common_private_msgs_generate_messages_cpp)
@@ -85,6 +74,10 @@ add_dependencies(targetPoint common_private_msgs_generate_messages_cpp)
 # add_executable(liner_speed_regulator src/liner_speed_regulator.cpp)
 # target_link_libraries(liner_speed_regulator cs_lib2 ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
+
+add_executable(my_test src/my_test.cpp)
+target_link_libraries(my_test ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+add_dependencies(my_test common_private_msgs_generate_messages_cpp)
 #############
 ## Install ##
 #############

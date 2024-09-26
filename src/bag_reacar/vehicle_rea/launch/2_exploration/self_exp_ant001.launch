@@ -2,13 +2,14 @@
     <arg name="namespace" default="ant01"/>
     <arg name="car_id" value="0"/>
     <!-- 定位参数 -->
-    <arg name="offset_x" default="1.0"/>
+    <arg name="offset_x" default="0.0"/>
     <arg name="offset_y" default="0.0"/>
+    <arg name="pcd_save" default="0"/>
     <!-- 底盘驱动参数 -->
-    <arg name="send_port_Remote" default="8021"/>
-    <arg name="receive_port_Remote" default="40021"/>
-    <arg name="server_ip_Remote" default="192.2.2.21"/>
-    <arg name="client_ip_Remote" default="192.2.2.22"/>
+    <arg name="send_port_remote" default="8021"/>
+    <arg name="receive_port_remote" default="20033"/>
+    <arg name="server_ip_remote" default="192.2.2.21"/>
+    <arg name="client_ip_remote" default="192.2.2.40"/>
 
     <arg name="send_port_vehicle" default="8021"/>
     <arg name="receive_port_vehicle" default="40021"/>
@@ -51,58 +52,60 @@
     <arg name="forecast_time" default="0.8"/>
     <arg name="reconfiguration_duration" default="3.0"/>
 
-    <arg name="maxSpeed" default="0.6"/>
+    <arg name="maxSpeed" default="0.5"/>
 
     <arg name="is_coordinate" default="false"/>
     
-
-    <group ns = "$(arg namespace)">
+ <arg name="trackModeAble" default="true"/>
+    <!-- <group ns = "$(arg namespace)"> -->
 
         <!-- 启动定位相关模块 -->
-        <!-- <include file="$(find vehicle_rea)/launch/sub_module/location.launch">
+         <include file="$(find vehicle_rea)/launch/0_sub_module/location.launch">
         </include>
         <include file="$(find ants_location_interface)/launch/ants_location_interface_rea.launch">
             <arg name="namespace" value="$(arg namespace)" />
             <arg name="offset_x" value="$(arg offset_x)" />
             <arg name="offset_y" value="$(arg offset_y)" />
-        </include> -->
-
+            <!-- <arg name="pcd_save/pcd_save_en" value="$(arg pcd_save)" /> -->
+        </include> 
+            
         <!-- 与底盘UDP通信部分，首先启动操纵端，然后启动通信端发送指令并解析回报的数据 -->
-        <!-- <include file="$(find vehicle_rea)/launch/sub_module/control_driver.launch">
+        <include file="$(find vehicle_rea)/launch/0_sub_module/control_driver.launch">
 
-        <arg name="send_port_Remote" value="$(arg send_port_Remote)" />
-        <arg name="receive_port_Remote" value="$(arg receive_port_Remote)" />
-        <arg name="server_ip_Remote" value="$(arg server_ip_Remote)"/>
-        <arg name="client_ip_Remote" value="$(arg client_ip_Remote)"/>
+        <arg name="send_port_remote" value="$(arg send_port_remote)" />
+        <arg name="receive_port_remote" value="$(arg receive_port_remote)" />
+        <arg name="server_ip_remote" value="$(arg server_ip_remote)"/>
+        <arg name="client_ip_remote" value="$(arg client_ip_remote)"/>
 
         <arg name="send_port_vehicle" value="$(arg send_port_vehicle)" />
         <arg name="receive_port_vehicle" value="$(arg receive_port_vehicle)"/>
         <arg name="server_ip_vehicle" value="$(arg server_ip_vehicle)"/>
         <arg name="client_ip_vehicle" value="$(arg client_ip_vehicle)"/>
-        </include> -->
+        </include>
 
         <!-- 启动规划与控制模块 -->
-        <group if="$(arg leader)">
-            <include file="$(find ants_local_planner_free)/launch/local_planner_free_rea.launch" >
+        <!-- <group if="$(arg leader)"> -->
+            <!-- <include file="$(find ants_local_planner_free)/launch/local_planner_free_rea.launch" >
                 <arg name="cameraOffsetZ" value="$(arg cameraOffsetZ)"/>
                 <arg name="goalX" value="$(arg vehicleX)"/>
                 <arg name="goalY" value="$(arg vehicleY)"/>
                 <arg name="maxSpeed" value="$(arg maxSpeed)"/>
                 <arg name="namespace" value="$(arg namespace)" />
-            </include>
-        </group>
+            </include> -->
+        <!-- </group> -->
 
         <!-- 启动规控通用模组 -->
-        <include file="$(find ants_paths_follower)/launch/paths_follower_rea.launch" >
+        <!-- <include file="$(find ants_paths_follower)/launch/paths_follower_rea.launch" >
             <arg name="cameraOffsetZ" value="$(arg cameraOffsetZ)"/>
             <arg name="goalX" value="$(arg vehicleX)"/>
             <arg name="goalY" value="$(arg vehicleY)"/>
             <arg name="namespace" value="$(arg namespace)" />
-        </include>
+            <arg name="trackModeAble" value="$(arg trackModeAble)" />
+        </include> -->
 
-        <include file="$(find ants_passable_area_analysis)/launch/ants_passable_area_analysis_rea.launch" >
+        <!-- <include file="$(find ants_passable_area_analysis)/launch/ants_passable_area_analysis_rea.launch" >
             <arg name="checkTerrainConn" value="$(arg checkTerrainConn)"/>
-        </include>
+        </include> -->
 
         <include file="$(find sensor_scan_generation)/launch/sensor_scan_generation_rea.launch" >
             <arg name="namespace" value="$(arg namespace)"/>
@@ -118,13 +121,13 @@
         <node pkg="tf" type="static_transform_publisher" name="sensorTransPublisher" 
             args="0 0 $(arg cameraOffsetZ) -1.5707963 0 -1.5707963 $(arg namespace)/sensor $(arg namespace)/camera 1000"/>
 
-    </group>
+    <!-- </group> -->
 
     <!-- 启动前沿探索点搜索 -->
-    <include file="$(find frontier_space)/launch/frontier_finder.launch" >
+    <!-- <include file="$(find frontier_space)/launch/frontier_finder.launch" >
         <arg name="namespace" value="$(arg namespace)" />
         <arg name="is_coordinate"   value="$(arg is_coordinate)"/>
         <arg name="car_id" value="$(arg car_id)" />
-    </include>
+    </include> -->
 
 </launch>

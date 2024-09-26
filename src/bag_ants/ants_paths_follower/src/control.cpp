@@ -1,94 +1,54 @@
 #include "control.h"
-#include "ros/init.h"
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 
-//TODO:目前先不考虑特定角度摆臂不动的问题
-
-namespace
-{
-auto motion_adjust_start_time_ = std::chrono::steady_clock::now();
-auto motion_adjust_current_time_ = std::chrono::steady_clock::now();
-auto front_arm_adjust_start_time_ = std::chrono::steady_clock::now();
-auto rear_arm_adjust_start_time_ = std::chrono::steady_clock::now();
-auto front_arm_adjust_current_time_ = std::chrono::steady_clock::now();
-auto rear_arm_adjust_current_time_ = std::chrono::steady_clock::now();
-
-int lastFrontArmAngle_{0};
-int lastRearArmAngle_{0};
-std::unique_ptr<ros::NodeHandle> nh_{nullptr};
-std::unique_ptr<ros::NodeHandle> nhPrivate_{nullptr};
-std::unique_ptr<ros::Publisher> commandPub_{nullptr};
-std::shared_ptr<const common_private_msgs::autonomyMessage> motionStatus_{
+std::unique_ptr<ros::NodeHandle> BaseControl::nh_{nullptr};
+std::unique_ptr<ros::NodeHandle> BaseControl::nh_private_{nullptr};
+std::unique_ptr<ros::Rate> BaseControl::rate_{nullptr};
+std::unique_ptr<common_private_msgs::Pose3D> BaseControl::pose{nullptr};
+std::unique_ptr<common_private_msgs::autonomyMessage>
+    BaseControl::motion_status{nullptr};
+std::unique_ptr<common_private_msgs::autonomyMessage> BaseControl::command{
     nullptr};
-std::shared_ptr<const geometry_msgs::Pose2D> pose_{nullptr};
-common_private_msgs::autonomyMessage command_{};
 
-double yawKP_;
-double yawErrorThreshold_;
-int yawStabilityTime_;
-double pointDistanceKP_;
-double pointDistanceErrorThreshold_;
-int pointDistanceStabilityTime_;
-double lineDistanceKP_;
-double lineDistanceErrorThreshold_;
-int lineDistanceStabilityTime_;
-double maxYawVelocity_;
-double maxLinearVelocity_;
-
-std::unique_ptr<ros::Rate> rate_{nullptr};
-} // namespace
-
-namespace
+Timer::Timer(int timer_num)
+: timer_num_(timer_num)
 {
-bool isAdjustFinished_(
-    const double error,
-    const double errorThreshold,
-    const int stabilityTime,
-    std::chrono::time_point<std::chrono::steady_clock> &startTime =
-        motion_adjust_start_time_,
-    std::chrono::time_point<std::chrono::steady_clock> &currentTime =
-        motion_adjust_current_time_);
-void brake_();
-Eigen::Vector2d getYawUnitVector_(const double yaw);
-void yawAdjust_(const double yawTarget);
-void pointDistanceAdjust_(const double pointDistanceTarget);
-void lineDistanceAdjust_(const double lineDistanceTarget);
-void wallDistanceAdjust_(const double wallDistanceTarget);
-double velocityLimit_(const double velocity, const double maxVelocity);
-
-} // namespace
-
-namespace
-{
-
-bool isAdjustFinished_(
-    const double error,
-    const double errorThreshold,
-    const int stabilityTime,
-    std::chrono::time_point<std::chrono::steady_clock> &startTime,
-    std::chrono::time_point<std::chrono::steady_clock> &currentTime)
-{
-    if (abs(error) > errorThreshold)
+    time_pairs_.resize(timer_num_);
+    for (auto time_pair_ : time_pairs_)
     {
-        startTime = std::chrono::steady_clock::now();
+        time_pair_.first = std::chrono::steady_clock::now();
+        time_pair_.second = std::chrono::steady_clock::now();
+    }
+}
+
+bool Timer::isFinished(const double error,
+                       const double error_threshold,
+                       const int stability_time,
+                       const int timer_identifier)
+{
+    int vector_index = timer_identifier - 1;
+    if (abs(error) > error_threshold)
+    {
+        time_pairs_[vector_index].first = std::chrono::steady_clock::now();
         return false; // 如果误差大于阈值，则认为没有调整完成
     }
     //为了防止误差一开始就小于阈值时，startTime_还未更新过
-    if (startTime == std::chrono::steady_clock::time_point{})
+    if (time_pairs_[vector_index].first ==
+        std::chrono::steady_clock::time_point{})
     {
-        startTime = std::chrono::steady_clock::now();
+        time_pairs_[vector_index].first = std::chrono::steady_clock::now();
     }
-    currentTime = std::chrono::steady_clock::now();
+    time_pairs_[vector_index].second = std::chrono::steady_clock::now();
     auto errorTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        currentTime - startTime);
+        time_pairs_[vector_index].second - time_pairs_[vector_index].first);
     std::cout << errorTime.count() << std::endl;
 
-    if (errorTime >= std::chrono::milliseconds{stabilityTime})
+    if (errorTime >= std::chrono::milliseconds{stability_time})
     {
-        startTime =
+        time_pairs_[vector_index].first =
             std::chrono::steady_clock::time_point{}; // 将 startTime_ 重置
         return true;
     }
@@ -97,244 +57,379 @@ bool isAdjustFinished_(
         return false;
     }
 }
-void brake_()
+
+void BaseControl::check_ptr()
+{
+    if (nh_ == nullptr || nh_private_ == nullptr || rate_ == nullptr ||
+        command == nullptr)
+    {
+        std::cerr << "BaseControl initialization failed!" << std::endl;
+        exit(5);
+    }
+    while (ros::ok())
+    {
+        if (pose == nullptr || motion_status == nullptr)
+        {
+            std::cout << "ptr in BaseControl is null" << std::endl;
+            ros::spinOnce();
+            rate_->sleep();
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+void MessageUpdate::messageUpdate()
 {
     while (ros::ok())
     {
         ros::spinOnce();
-        command_.linearVelocity = 0.0f;
-        command_.yawVelocity = 0.0f;
-        commandPub_->publish(command_);
+        if (command != nullptr)
+        {
+            command->yaw_speed =
+                speedLimit_(command->yaw_speed, max_yaw_speed_);
+            command->linear_speed =
+                speedLimit_(command->linear_speed, max_linear_speed_);
+            command_pub_.publish(*command);
+        }
+        else
+        {
+            std::cout << "command is null" << std::endl;
+        }
         rate_->sleep();
-        if (isAdjustFinished_(motionStatus_->linearVelocity, 0.0, 500))
+    }
+}
+
+void MessageUpdate::poseHandler_(const nav_msgs::Odometry::ConstPtr &odomIn)
+{
+    double roll, pitch, yaw;
+    geometry_msgs::Quaternion geometry_quaternion =
+        odomIn->pose.pose.orientation;
+    tf::Matrix3x3(tf::Quaternion(geometry_quaternion.x,
+                                 geometry_quaternion.y,
+                                 geometry_quaternion.z,
+                                 geometry_quaternion.w))
+        .getRPY(roll, pitch, yaw);
+    if (pose == nullptr)
+    {
+        pose = std::make_unique<common_private_msgs::Pose3D>();
+    }
+    pose->x = odomIn->pose.pose.position.x - cos(yaw) * sensor_offset_x_ +
+              sin(yaw) * sensor_offset_y_;
+    pose->y = odomIn->pose.pose.position.y - sin(yaw) * sensor_offset_x_ -
+              cos(yaw) * sensor_offset_y_;
+    pose->z = odomIn->pose.pose.position.z;
+    pose->yaw = yaw;
+    pose->pitch = pitch;
+    pose->roll = roll;
+}
+
+void MessageUpdate::motionStatusHandler_(
+    const common_private_msgs::autonomyMessage::ConstPtr &status)
+{
+    if (motion_status == nullptr)
+    {
+        motion_status =
+            std::make_unique<common_private_msgs::autonomyMessage>();
+    }
+    motion_status->front_arm_angle = status->front_arm_angle;
+    motion_status->rear_arm_angle = status->rear_arm_angle;
+    motion_status->linear_speed = status->linear_speed;
+    motion_status->yaw_speed = status->yaw_speed;
+}
+
+double MessageUpdate::speedLimit_(const double speed, const double max_speed)
+{
+    if (speed > max_speed)
+    {
+        return max_speed;
+    }
+    else if (speed < -max_speed)
+    {
+        return -max_speed;
+    }
+    else
+    {
+        return speed;
+    }
+}
+
+void YawControl::control(const double yaw_target)
+{
+    double yaw = yaw_normalization(yaw_target);
+    check_ptr();
+    while (ros::ok())
+    {
+        double error = yaw - pose->yaw;
+        error = yaw_normalization(error);
+        std::cout << "yaw error: " << error << std::endl;
+        command->linear_speed = 0.0;
+        command->yaw_speed = kp_ * error;
+        rate_->sleep();
+        if (timer_.isFinished(error, error_threshold_, stability_time_))
+        {
+            std::cout << "yaw align finished" << std::endl;
+            break;
+        }
+    }
+}
+double YawControl::yaw_normalization(double yaw)
+{
+    while (yaw > PI || yaw < -PI)
+    {
+        if (yaw > PI)
+        {
+            yaw -= 2 * PI;
+        }
+        else
+        {
+            yaw += 2 * PI;
+        }
+    }
+    return yaw;
+}
+void PointDistanceControl::control(
+    const std::shared_ptr<const common_private_msgs::Pose3D> target_point)
+{
+    check_ptr();
+    while (ros::ok())
+    {
+        Eigen::Vector2d distance_vector{target_point->x - pose->x,
+                                        target_point->y - pose->y};
+        double distance_error = distance_vector.norm();
+        Eigen::Vector2d vehicle_yaw_unit_vector{cos(pose->yaw), sin(pose->yaw)};
+        if (distance_vector.dot(vehicle_yaw_unit_vector) < 0)
+        {
+            distance_error = -distance_error;
+        }
+        double yaw_error =
+            std::atan2(distance_vector.y(), distance_vector.x()) - pose->yaw;
+        std::cout << "point distance error: " << distance_error << std::endl;
+        std::cout << "yaw error: " << yaw_error << std::endl;
+        command->linear_speed = distance_error * kp_;
+        command->yaw_speed = yaw_error * yaw_kp_in_point_distance_;
+        rate_->sleep();
+        if (timer_.isFinished(
+                distance_error, error_threshold_, stability_time_))
+        {
+            std::cout << "point distance align finished" << std::endl;
+            break;
+        }
+    }
+}
+
+void LineDistanceControl::control(
+    const std::shared_ptr<const common_private_msgs::Pose3D> target_point)
+{
+    check_ptr();
+    Eigen::Vector2d target_yaw_unit_vector{cos(target_point->yaw),
+                                           sin(target_point->yaw)};
+    while (ros::ok())
+    {
+        Eigen::Vector2d distance_vector{target_point->x - pose->x,
+                                        target_point->y - pose->y};
+        double distance_error = target_yaw_unit_vector.dot(distance_vector);
+        std::cout << "line distance error: " << distance_error << std::endl;
+        command->yaw_speed = 0.0;
+        command->linear_speed = distance_error * kp_;
+        rate_->sleep();
+        if (timer_.isFinished(
+                distance_error, error_threshold_, stability_time_))
+        {
+            std::cout << "line distance align finished" << std::endl;
+            break;
+        }
+    }
+}
+
+void Brake::control()
+{
+    check_ptr();
+    command->linear_speed = 0.0;
+    command->yaw_speed = 0.0;
+    while (ros::ok())
+    {
+        rate_->sleep();
+        if (timer_.isFinished(motion_status->linear_speed +
+                                  motion_status->yaw_speed,
+                              0.0,
+                              stability_time_))
         {
             std::cout << "brake finished" << std::endl;
             break;
         }
     }
 }
-// 获取yaw方向的单位向量
-Eigen::Vector2d getYawUnitVector_(const double yaw)
-{
-    // 创建一个二维单位向量
-    Eigen::Vector2d unitVector;
-    unitVector << cos(yaw), sin(yaw);
-    return unitVector; // 返回单位向量
-}
 
-void yawAdjust_(const double yawTarget)
+void GoStraight::control(double speed, int time)
 {
+    check_ptr();
     while (ros::ok())
     {
-        ros::spinOnce();
-        double error = yawTarget - pose_->theta;
-        std::cout << "yaw error: " << error << std::endl;
-        command_.linearVelocity = 0.0f;
-        command_.yawVelocity =
-            static_cast<float>(velocityLimit_(yawKP_ * error, maxYawVelocity_));
-        commandPub_->publish(command_);
-        rate_->sleep();
-        if (isAdjustFinished_(error, yawErrorThreshold_, yawStabilityTime_))
+        command->linear_speed = speed;
+        command->yaw_speed = 0.0;
+        if (timer_.isFinished(0, 0, time))
         {
-            std::cout << "yawalign finished" << std::endl;
             break;
         }
     }
-    brake_();
+    brake_.control();
 }
-
-void pointDistanceAdjust_(const double xTarget, const double yTarget)
+void GetToTargetPoint::control(
+    const std::shared_ptr<const common_private_msgs::Pose3D> target_point,
+    const bool whether_control_yaw)
 {
-    while (ros::ok())
+    if (whether_control_yaw)
     {
-        ros::spinOnce();
-        Eigen::Vector2d distanceVector{xTarget - pose_->x, yTarget - pose_->y};
-        Eigen::Vector2d vehicleYawUnitVector = getYawUnitVector_(pose_->theta);
-        double pointDistanceError = std::sqrt(std::pow(pose_->x - xTarget, 2) +
-                                              std::pow(pose_->y - yTarget, 2));
-        if (distanceVector.dot(vehicleYawUnitVector) < 0)
-        {
-            pointDistanceError = -pointDistanceError;
-        }
-        double yawError =
-            std::atan2(yTarget - pose_->y, xTarget - pose_->x) - pose_->theta;
-        std::cout << "point distance error: " << pointDistanceError
-                  << std::endl;
-        std::cout << "yaw error: " << yawError << std::endl;
-        command_.linearVelocity = static_cast<float>(velocityLimit_(
-            pointDistanceKP_ * pointDistanceError, maxLinearVelocity_));
-        command_.yawVelocity = static_cast<float>(
-            velocityLimit_(yawKP_ * yawError, maxYawVelocity_));
-        commandPub_->publish(command_);
-        rate_->sleep();
-        if (isAdjustFinished_(pointDistanceError,
-                              pointDistanceErrorThreshold_,
-                              pointDistanceStabilityTime_))
-        {
-            std::cout << "point distance align finished" << std::endl;
-            break;
-        }
-    }
-    brake_();
-}
-void lineDistanceAdjust_(
-    const std::shared_ptr<const geometry_msgs::Pose2D> targetPoint)
-{
-    Eigen::Vector2d targetYawUnitVector = getYawUnitVector_(targetPoint->theta);
-    while (ros::ok())
-    {
-        ros::spinOnce();
-        Eigen::Vector2d distanceVector{targetPoint->x - pose_->x,
-                                       targetPoint->y - pose_->y};
-        double projectionDistance = targetYawUnitVector.dot(distanceVector);
-        double error = projectionDistance;
-        std::cout << "line distance error: " << error << std::endl;
-        command_.yawVelocity = 0.0f;
-        command_.linearVelocity = static_cast<float>(
-            velocityLimit_(lineDistanceKP_ * error, maxLinearVelocity_));
-        commandPub_->publish(command_);
-        rate_->sleep();
-        if (isAdjustFinished_(
-                error, lineDistanceErrorThreshold_, lineDistanceStabilityTime_))
-        {
-            std::cout << "line distance align finished" << std::endl;
-            break;
-        }
-    }
-    brake_();
-}
-double velocityLimit_(const double velocity, const double maxVelocity)
-{
-    if (velocity > maxVelocity)
-    {
-        return maxVelocity;
-    }
-    else if (velocity < -maxVelocity)
-    {
-        return -maxVelocity;
+        yaw_control_.control(
+            std::atan2(target_point->y - pose->y, target_point->x - pose->x));
+        brake_.control();
+        point_distance_control_.control(target_point);
+        brake_.control();
+        yaw_control_.control(target_point->yaw);
+        brake_.control();
+        line_distance_control_.control(target_point);
+        brake_.control();
     }
     else
     {
-        return velocity;
+        line_distance_control_.control(target_point);
+        brake_.control();
     }
 }
-} // namespace
 
-namespace control
+void SwingToTargetAngle::control(const int target_front_arm_angle,
+                                 const int target_rear_arm_angle)
 {
-
-void initializeControlParameter(
-    std::shared_ptr<const common_private_msgs::autonomyMessage> motionStatus,
-    std::shared_ptr<const geometry_msgs::Pose2D> pose)
-{
-    nh_ = std::make_unique<ros::NodeHandle>();
-    nhPrivate_ = std::make_unique<ros::NodeHandle>("~");
-    commandPub_ = std::make_unique<ros::Publisher>(
-        nh_->advertise<common_private_msgs::autonomyMessage>("autonomyCommand",
-                                                             1));
-    motionStatus_ = motionStatus;
-    pose_ = pose;
-    rate_ = std::make_unique<ros::Rate>(100);
-
-    yawKP_ = nhPrivate_->param("yawKP", 10.0);
-    yawErrorThreshold_ = nhPrivate_->param("yawErrorThreshold", 0.002);
-    yawStabilityTime_ = nhPrivate_->param("yawStabilityTime", 500);
-    pointDistanceKP_ = nhPrivate_->param("pointDistanceKP", 0.5);
-    pointDistanceErrorThreshold_ =
-        nhPrivate_->param("pointDistanceErrorThreshold", 0.10);
-    pointDistanceStabilityTime_ =
-        nhPrivate_->param("pointDistanceStabilityTime", 500);
-    lineDistanceKP_ = nhPrivate_->param("lineDistanceKP", 0.5);
-    lineDistanceErrorThreshold_ =
-        nhPrivate_->param("lineDistanceErrorThreshold", 0.01);
-    lineDistanceStabilityTime_ =
-        nhPrivate_->param("lineDistanceStabilityTime", 500);
-}
-void getToTargetPoint(
-    const std::shared_ptr<const geometry_msgs::Pose2D> targetPoint,
-    const bool isClimbing,
-    const bool adjustYaw)
-{
-    if (isClimbing)
-    {
-        maxYawVelocity_ = nhPrivate_->param("maxObliqueYawVelocity", 1);
-        maxLinearVelocity_ = nhPrivate_->param("maxObliqueLinearVelocity", 0.5);
-    }
-    else
-    {
-        maxYawVelocity_ = nhPrivate_->param("maxLevelYawVelocity", 2);
-        maxLinearVelocity_ = nhPrivate_->param("maxLevelLinearVelocity", 1);
-    }
-    if (adjustYaw)
-    {
-        yawAdjust_(
-            std::atan2(targetPoint->y - pose_->y, targetPoint->x - pose_->x));
-        pointDistanceAdjust_(targetPoint->x, targetPoint->y);
-        yawAdjust_(targetPoint->theta);
-        lineDistanceAdjust_(targetPoint);
-    }
-    else
-    {
-        lineDistanceAdjust_(targetPoint);
-    }
-}
-void swingToTargetAngle(const int targetFrontArmAngle,
-                        const int targetRearArmAngle)
-{
-    command_.frontArmAngle = static_cast<int16_t>(targetFrontArmAngle);
-    command_.rearArmAngle = static_cast<int16_t>(targetRearArmAngle);
+    check_ptr();
+    command->front_arm_angle = static_cast<int16_t>(target_front_arm_angle);
+    command->rear_arm_angle = static_cast<int16_t>(target_rear_arm_angle);
     while (ros::ok())
     {
-        ros::spinOnce();
-        if (isAdjustFinished_(lastFrontArmAngle_ - motionStatus_->frontArmAngle,
+        if (timer_.isFinished(last_front_arm_angle_ -
+                                  motion_status->front_arm_angle,
                               0.0,
-                              2000,
-                              front_arm_adjust_start_time_,
-                              front_arm_adjust_current_time_))
+                              stability_time_,
+                              1))
         {
-            auto frontArmAngleError =
-                targetFrontArmAngle - motionStatus_->frontArmAngle;
-            if (abs(frontArmAngleError) <= 3 && frontArmAngleError != 0)
+            auto front_arm_angle_error =
+                target_front_arm_angle - motion_status->front_arm_angle;
+            if (abs(front_arm_angle_error) <= 3 && front_arm_angle_error != 0)
             {
-                command_.frontArmAngle = static_cast<int16_t>(
-                    targetFrontArmAngle + frontArmAngleError);
+                command->front_arm_angle = static_cast<int16_t>(
+                    command->front_arm_angle + front_arm_angle_error);
             }
         }
-        if (isAdjustFinished_(lastRearArmAngle_ - motionStatus_->rearArmAngle,
+        if (timer_.isFinished(last_rear_arm_angle_ -
+                                  motion_status->rear_arm_angle,
                               0.0,
-                              2000,
-                              rear_arm_adjust_start_time_,
-                              rear_arm_adjust_current_time_))
+                              stability_time_,
+                              2))
         {
-            auto rearArmAngleError =
-                targetRearArmAngle - motionStatus_->rearArmAngle;
-            if (abs(rearArmAngleError) <= 3 && rearArmAngleError != 0)
+            auto rear_arm_angle_error =
+                target_rear_arm_angle - motion_status->rear_arm_angle;
+            if (abs(rear_arm_angle_error) <= 3 && rear_arm_angle_error != 0)
             {
-                command_.rearArmAngle = static_cast<int16_t>(
-                    targetRearArmAngle + rearArmAngleError);
+                command->rear_arm_angle = static_cast<int16_t>(
+                    command->rear_arm_angle + rear_arm_angle_error);
             }
         }
-        if (motionStatus_->frontArmAngle == targetFrontArmAngle &&
-            motionStatus_->rearArmAngle == targetRearArmAngle)
+        if (motion_status->front_arm_angle == target_front_arm_angle &&
+            motion_status->rear_arm_angle == target_rear_arm_angle)
         {
             break;
         }
-        lastFrontArmAngle_ = motionStatus_->frontArmAngle;
-        lastRearArmAngle_ = motionStatus_->rearArmAngle;
-        commandPub_->publish(command_);
+        last_front_arm_angle_ = motion_status->front_arm_angle;
+        last_rear_arm_angle_ = motion_status->rear_arm_angle;
         rate_->sleep();
     }
 }
 
-void goStraight(const double velocity)
+void AttitudeAdjustment::upStairs(double target_distance)
 {
-    command_.linearVelocity = static_cast<float>(velocity);
-    command_.yawVelocity = 0.0f;
+    check_ptr();
     while (ros::ok())
     {
-        commandPub_->publish(command_);
+        ros::spinOnce();
+        double wall_error = target_right_wall_distance_ - right_wall_->data;
+        command->yaw_speed = kp_ * wall_error;
+        command->linear_speed = linear_speed_;
         rate_->sleep();
+        if (timer_.isFinished(front_wall_->data, target_distance, 100))
+        {
+            break;
+        }
+    }
+    brake_.control();
+}
+void AttitudeAdjustment::downStairs(
+    const std::shared_ptr<const common_private_msgs::Pose3D> target_point)
+{
+    check_ptr();
+    Eigen::Vector2d target_yaw_unit_vector{cos(target_point->yaw),
+                                           sin(target_point->yaw)};
+    while (ros::ok())
+    {
+        ros::spinOnce();
+        Eigen::Vector2d distance_vector{target_point->x - pose->x,
+                                        target_point->y - pose->y};
+        double distance_error = target_yaw_unit_vector.dot(distance_vector);
+        std::cout << "line distance error: " << distance_error << std::endl;
+        double wall_error = target_left_wall_distance_ - left_wall_->data;
+        command->yaw_speed = -kp_ * wall_error;
+        command->linear_speed = linear_speed_;
+        rate_->sleep();
+        if (timer_.isFinished(distance_error, downStairs_error_threshold_, 100))
+        {
+            break;
+        }
+    }
+    brake_.control();
+}
+void AttitudeAdjustment::check_ptr()
+{
+    BaseControl::check_ptr();
+    while (ros::ok())
+    {
+        if (right_wall_ == nullptr || left_wall_ == nullptr ||
+            front_wall_ == nullptr)
+        {
+            std::cout << "ptr in AttitudeAdjustment is null" << std::endl;
+            ros::spinOnce();
+            rate_->sleep();
+        }
+        else
+        {
+            break;
+        }
     }
 }
 
-} // namespace control
+void AttitudeAdjustment::rightWallHandler(
+    const std_msgs::Float64::ConstPtr &msg)
+{
+    if (right_wall_ == nullptr)
+    {
+        right_wall_ = std::make_unique<std_msgs::Float64>();
+    }
+    right_wall_->data = msg->data;
+}
+void AttitudeAdjustment::leftWallHandler(const std_msgs::Float64::ConstPtr &msg)
+{
+    if (left_wall_ == nullptr)
+    {
+        left_wall_ = std::make_unique<std_msgs::Float64>();
+    }
+    left_wall_->data = msg->data;
+}
+
+void AttitudeAdjustment::frontWallHandler(
+    const std_msgs::Float64::ConstPtr &msg)
+{
+    if (front_wall_ == nullptr)
+    {
+        front_wall_ = std::make_unique<std_msgs::Float64>();
+    }
+    front_wall_->data = msg->data;
+}

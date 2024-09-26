@@ -1,30 +1,36 @@
 <launch>
-    <arg name="send_port_Remote" default="8021"/>
-    <arg name="receive_port_Remote" default="20033"/>
-    <arg name="send_port_Vehicle" default="8021"/>
-    <arg name="receive_port_Vehicle" default="40021"/>
-    <arg name="server_ip_Remote" default="192.2.2.21"/>
-    <arg name="client_ip_Remote" default="192.2.2.40"/>
-    <arg name="server_ip_Vehicle" default="192.2.2.21"/>
-    <arg name="client_ip_Vehicle" default="192.2.2.22"/>
-    <arg name="udpVehiclePrint" default="false"/>
-    <arg name="udpRemotePrint" default="false"/>
+    <arg name="send_port_remote" default="8021"/>
+    <arg name="receive_port_remote" default="20033"/>
+    <arg name="send_port_vehicle" default="8021"/>
+    <arg name="receive_port_vehicle" default="40021"/>
+    <arg name="server_ip_remote" default="192.2.2.21"/>
+    <arg name="client_ip_remote" default="192.2.2.40"/>
+    <arg name="server_ip_vehicle" default="192.2.2.21"/>
+    <arg name="client_ip_vehicle" default="192.2.2.22"/>
+    <arg name="udp_vehicle_print" default="true"/>
+    <arg name="udp_remote_print" default="false"/>
+    <arg name="ros_rate_remote" default="100"/>
+    <arg name="ros_rate_vehicle" default="100"/>
+    <arg name="chassis_power_on" default="true"/>
 
-    <node pkg="ants_paths_follower" type="UdpRemote" name="UdpRemote" output="screen" respawn="true">
-      <param name="send_port_Remote" type="int" value="$(arg send_port_Remote)" />
-      <param name="receive_port_Remote" type="int" value="$(arg receive_port_Remote)" />
-      <param name="server_ip_Remote" type="string" value="$(arg server_ip_Remote)" />
-      <param name="client_ip_Remote" type="string" value="$(arg client_ip_Remote)" />
-      <param name="udpRemotePrint" type="bool" value="$(arg udpRemotePrint)" />
+
+    <node pkg="ants_paths_follower" type="rosUdpBridge" name="rosUdpBridge" output="screen" required="true">
+      <param name="send_port_vehicle" type="int" value="$(arg send_port_vehicle)" />
+      <param name="receive_port_vehicle" type="int" value="$(arg receive_port_vehicle)" />
+      <param name="server_ip_vehicle" type="string" value="$(arg server_ip_vehicle)" />
+      <param name="client_ip_vehicle" type="string" value="$(arg client_ip_vehicle)" />
+      <param name="udp_vehicle_print" type="bool" value="$(arg udp_vehicle_print)" />
+      <param name="ros_rate_vehicle" type="int" value="$(arg ros_rate_vehicle)" />
+
+      <param name="send_port_remote" type="int" value="$(arg send_port_remote)" />
+      <param name="receive_port_remote" type="int" value="$(arg receive_port_remote)" />
+      <param name="server_ip_remote" type="string" value="$(arg server_ip_remote)" />
+      <param name="client_ip_remote" type="string" value="$(arg client_ip_remote)" />
+      <param name="udp_remote_print" type="bool" value="$(arg udp_remote_print)" />
+      <param name="ros_rate_remote" type="int" value="$(arg ros_rate_remote)" />
+      <param name="chassis_power_on" type="bool" value="$(arg chassis_power_on)" />
     </node>
 
-    <node pkg="ants_paths_follower" type="UdpVehicle" name="UdpVehicle" output="screen" required="true">
-      <param name="send_port_Vehicle" type="int" value="$(arg send_port_Vehicle)" />
-      <param name="receive_port_Vehicle" type="int" value="$(arg receive_port_Vehicle)" />
-      <param name="server_ip_Vehicle" type="string" value="$(arg server_ip_Vehicle)" />
-      <param name="client_ip_Vehicle" type="string" value="$(arg client_ip_Vehicle)" />
-      <param name="udpVehiclePrint" type="bool" value="$(arg udpVehiclePrint)" />
-    </node>
 
     <node pkg="ants_paths_follower" type="joy_control" name="joy_control" output="screen">
     </node>

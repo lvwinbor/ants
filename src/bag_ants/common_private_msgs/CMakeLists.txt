@@ -15,7 +15,9 @@ add_message_files(
   vehicle_param.msg
   vehicle_status.msg
   planning_info.msg
-  controlMessage.msg
+  autonomyMessage.msg
+  joyMessage.msg
+  Pose3D.msg
   
 )
 

@@ -1,0 +1,36 @@
+<launch>
+    <arg name="send_port_Remote" default="8021"/>
+    <arg name="receive_port_Remote" default="20033"/>
+    <arg name="send_port_Vehicle" default="8021"/>
+    <arg name="receive_port_Vehicle" default="40021"/>
+    <arg name="server_ip_Remote" default="192.2.2.21"/>
+    <arg name="client_ip_Remote" default="192.2.2.40"/>
+    <arg name="server_ip_Vehicle" default="192.2.2.21"/>
+    <arg name="client_ip_Vehicle" default="192.2.2.22"/>
+    <arg name="udpVehiclePrint" default="false"/>
+    <arg name="udpRemotePrint" default="true"/>
+    <arg name="rosRateRemotet" default="100"/>
+    <arg name="rosRateVehicle" default="100"/>
+    <arg name="chassisPowerOn" default="false"/>
+
+
+    <node pkg="ants_paths_follower" type="rosUdpBridge" name="rosUdpBridge" output="screen" required="true">
+      <param name="send_port_Vehicle" type="int" value="$(arg send_port_Vehicle)" />
+      <param name="receive_port_Vehicle" type="int" value="$(arg receive_port_Vehicle)" />
+      <param name="server_ip_Vehicle" type="string" value="$(arg server_ip_Vehicle)" />
+      <param name="client_ip_Vehicle" type="string" value="$(arg client_ip_Vehicle)" />
+      <param name="udpVehiclePrint" type="bool" value="$(arg udpVehiclePrint)" />
+      <param name="rosRateVehicle" type="int" value="$(arg rosRateVehicle)" />
+
+      <param name="send_port_Remote" type="int" value="$(arg send_port_Remote)" />
+      <param name="receive_port_Remote" type="int" value="$(arg receive_port_Remote)" />
+      <param name="server_ip_Remote" type="string" value="$(arg server_ip_Remote)" />
+      <param name="client_ip_Remote" type="string" value="$(arg client_ip_Remote)" />
+      <param name="udpRemotePrint" type="bool" value="$(arg udpRemotePrint)" />
+      <param name="rosRateRemotet" type="int" value="$(arg rosRateRemotet)" />
+      <param name="chassisPowerOn" type="bool" value="$(arg chassisPowerOn)" />
+    </node>
+
+
+
+</launch>

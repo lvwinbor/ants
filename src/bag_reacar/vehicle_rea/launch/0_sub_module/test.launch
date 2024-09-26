@@ -1,0 +1,48 @@
+<launch>
+<arg name = "sensor_offset_x" default = "0.205"/>
+<arg name = "sensor_offset_y" default = "0.0"/>
+<arg name = "max_yaw_velocity" default = "1.0"/>
+<arg name = "max_linear_velocity" default = "0.5"/>
+<arg name = "yaw_kp" default = "10.0"/>
+<arg name = "yaw_error_threshold" default = "0.005"/>
+<arg name = "yaw_stability_time" default = "500"/>
+<arg name = "point_distance_kp" default = "0.5"/>
+<arg name = "point_distance_error_threshold" default = "0.05"/>
+<arg name = "point_distance_stability_time" default = "500"/>
+<arg name = "line_distance_kp" default = "1"/>
+<arg name = "line_distance_error_threshold" default = "0.01"/>
+<arg name = "line_distance_stability_time" default = "500"/>
+<arg name = "yaw_kp_in_point_distance" default = "5"/>
+<arg name = "brake_stability_time" default = "500"/>
+<arg name = "swing_stability_time" default = "2000"/>
+<arg name = "attitude_adjustment_kp" default = "5"/>
+<arg name = "linear_velocity" default = "0.20"/>
+<arg name = "target_right_wall_distance" default = "0.67"/>
+<arg name = "target_left_wall_distance" default = "0.6"/>
+
+  <node pkg="ants_paths_follower" type="targetPoint" name="targetPoint" output="screen" >
+
+
+    <param name="sensor_offset_x" value="$(arg sensor_offset_x)"/>
+    <param name="sensor_offset_y" value="$(arg sensor_offset_y)"/>
+    <param name="max_yaw_velocity" value="$(arg max_yaw_velocity)"/>
+    <param name="max_linear_velocity" value="$(arg max_linear_velocity)"/>
+    <param name="yaw_kp" value="$(arg yaw_kp)"/>
+    <param name="yaw_error_threshold" value="$(arg yaw_error_threshold)"/>
+    <param name="yaw_stability_time" value="$(arg yaw_stability_time)"/>
+    <param name="point_distance_kp" value="$(arg point_distance_kp)"/>
+    <param name="point_distance_error_threshold" value="$(arg point_distance_error_threshold)"/>
+    <param name="point_distance_stability_time" value="$(arg point_distance_stability_time)"/>
+    <param name="line_distance_kp" value="$(arg line_distance_kp)"/>
+    <param name="line_distance_error_threshold" value="$(arg line_distance_error_threshold)"/>
+    <param name="line_distance_stability_time" value="$(arg line_distance_stability_time)"/>
+    <param name="yaw_kp_in_point_distance" value="$(arg yaw_kp_in_point_distance)"/>
+    <param name="brake_stability_time" value="$(arg brake_stability_time)"/>
+    <param name="swing_stability_time" value="$(arg swing_stability_time)"/>
+    <param name="attitude_adjustment_kp" value="$(arg attitude_adjustment_kp)"/>
+    <param name="linear_velocity" value="$(arg linear_velocity)"/>
+    <param name="target_right_wall_distance" value="$(arg target_right_wall_distance)"/>
+    <param name="target_left_wall_distance" value="$(arg target_left_wall_distance)"/>
+  </node>
+
+</launch>

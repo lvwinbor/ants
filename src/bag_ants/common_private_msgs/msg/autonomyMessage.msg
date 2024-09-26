@@ -1,4 +1,4 @@
-float32  linearVelocity
-float32 yawVelocity
-int16 frontArmAngle
-int16 rearArmAngle
+float64  linear_speed
+float64 yaw_speed
+int32 front_arm_angle
+int32 rear_arm_angle

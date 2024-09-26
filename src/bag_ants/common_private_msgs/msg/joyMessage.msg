@@ -1,7 +1,7 @@
-float32  linearVelocity
-float32 yawVelocity
-int16 frontArmAngle
-int16 rearArmAngle
-bool joyControlMode
-bool remoteControlMode
-bool armAngleToZero
+float64  linear_speed
+float64 yaw_speed
+int32 front_arm_angle
+int32 rear_arm_angle
+bool joy_control_mode
+bool remote_control_mode
+bool arm_angle_to_zero
